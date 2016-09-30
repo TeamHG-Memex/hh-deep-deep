@@ -1,24 +1,22 @@
 import csv
 import hashlib
-import json
 import logging
 from pathlib import Path
 import subprocess
 from typing import Dict, List
 
-import joblib
-
 
 class CrawlProcess:
     jobs_root = Path('jobs')
+    deep_deep_image = 'deep-deep'  # FIXME?
 
-    def __init__(self, *, id_: str, seeds: List[str], page_clf):
+    def __init__(self, *, id_: str, seeds: List[str], page_clf_data: bytes):
         self.pid = None
         self.id_ = id_
         self.seeds = seeds
-        self.page_clf = page_clf
+        self.page_clf_data = page_clf_data
         self.root = (self.jobs_root /
-                     hashlib.md5(id_.encode('utf8')).hexdigst()
+                     hashlib.md5(id_.encode('utf8')).hexdigest()
                      ).absolute()
 
     @classmethod
@@ -29,32 +27,28 @@ class CrawlProcess:
         return {}
 
     def start(self):
-        self.root.mkdir(exist_ok=True)
+        self.root.mkdir(parents=True, exist_ok=True)
         self.root.joinpath('id.txt').write_text(self.id_)
-
-        page_clf_path = str(self.root / 'page_clf.joblib')
-        joblib.dump(self.page_clf, page_clf_path)
-
-        seeds_path = str(self.root / 'seeds.csv')
-        with open(seeds_path, 'wt') as f:
+        self.root.joinpath('page_clf.joblib').write_bytes(self.page_clf_data)
+        with self.root.joinpath('seeds.csv').open('wt') as f:
             csv.writer(f).writerows(self.seeds)
-
-        log_path = str(self.root / 'spider.log')
-        items_path = str(self.root / 'items.jl')
         args = [
+            'docker', 'run', '-d',
+            '-v', '{}:{}'.format(self.root, '/job'),
+            self.deep_deep_image,
             'scrapy', 'crawl', 'relevant',
-            '-a', 'seeds_url={}'.format(seeds_path),
-            '-a', 'checkpoint_path={}'.format(self.root),
-            '-a', 'classifier_path={}'.format(page_clf_path),
-            '-o', 'gzip:{}'.format(items_path),
-            '--logfile', log_path,
+            '-a', 'seeds_url=/job/seeds.txt',
+            '-a', 'checkpoint_path=/job',
+            '-a', 'classifier_path=/job/page_clf.joblib',
+            '-o', 'gzip:/job/items.jl',
+            '--logfile', '/job/spider.log',
             '-L', 'INFO',
             '-s', 'CLOSESPIDER_ITEMCOUNT=1000000',
         ]
-
         logging.info('Starting crawl in {}'.format(self.root))
-        # TODO - get container name from docker
-        subprocess.run(args, check=True)
+        self.pid = subprocess.check_output(args).decode('utf8')
+        logging.info('Crawl started, container id {}'.format(self.pid))
+        self.root.joinpath('pid.txt').write_text(self.pid)
 
     def stop(self):
         pass  # TODO

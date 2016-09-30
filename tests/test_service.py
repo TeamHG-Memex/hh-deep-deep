@@ -1,4 +1,3 @@
-from collections import namedtuple
 import json
 import logging
 from pprint import pprint
@@ -8,7 +7,7 @@ from typing import Dict
 from kafka import KafkaConsumer, KafkaProducer
 
 from hh_deep_deep.service import Service, encode_message, \
-    encode_model, decode_model
+    encode_model_data, decode_model_data
 from hh_deep_deep.utils import configure_logging
 
 
@@ -43,15 +42,12 @@ def test_service():
     service_thread.join()
 
 
-Point = namedtuple('Point', 'x, y')
-
-
 def test_encode_model():
-    p = Point(-1, 2.25)
-    assert isinstance(encode_model(p), str)
-    assert p == decode_model(encode_model(p))
-    assert decode_model(None) is None
-    assert encode_model(None) is None
+    data = 'ё'.encode('utf8')
+    assert isinstance(encode_model_data(data), str)
+    assert data == decode_model_data(encode_model_data(data))
+    assert decode_model_data(None) is None
+    assert encode_model_data(None) is None
 
 
 def decode_message(message: bytes) -> Dict:

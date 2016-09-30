@@ -14,8 +14,8 @@ from .crawl import CrawlProcess
 
 
 class Service:
-    input_topic = 'dd-modeler-input'
-    output_topic = 'dd-modeler-output'
+    input_topic = 'dd-trainer-input'
+    output_topic = 'dd-trainer-output'
 
     def __init__(self, kafka_host=None):
         kafka_kwargs = {}
@@ -44,14 +44,19 @@ class Service:
                     logging.info('Got message to stop (from tests)')
                     return
                 elif all(key in value for key in ['id', 'page_model', 'seeds']):
+                    logging.info(
+                        'Got start crawl message with id "{}"'.format(value['id']))
                     self.start_crawl(value)
                 elif 'id' in value and value.get('stop'):
+                    logging.info(
+                        'Got stop crawl meessage with id "{}"'.format(value['id']))
                     self.stop_crawl(value)
                 else:
                     logging.error(
                         'Dropping a message in unknown format: {}'
                         .format(pformat(value)))
             self.send_updates()
+            self.consumer.commit()
 
     def send_result(self, topic: str, result: Dict) -> None:
         logging.info('Sending result for id "{}" to {}'
@@ -65,8 +70,8 @@ class Service:
         if current_process is not None:
             current_process.stop()
         seeds = request['seeds']
-        model = decode_model(request['model'])
-        process = CrawlProcess(id_=id_, seeds=seeds, page_clf=model)
+        page_clf_data = decode_model_data(request['page_model'])
+        process = CrawlProcess(id_=id_, seeds=seeds, page_clf_data=page_clf_data)
         process.start()
         self.running[id_] = process
 
@@ -89,18 +94,14 @@ def encode_message(message: Dict) -> bytes:
         raise
 
 
-def encode_model(model: object) -> Optional[str]:
-    if model is not None:
-        return (
-            base64.b64encode(
-                zlib.compress(
-                    pickle.dumps(model, protocol=pickle.HIGHEST_PROTOCOL)))
-            .decode('ascii'))
+def encode_model_data(data: Optional[bytes]) -> Optional[str]:
+    if data:
+        return base64.b64encode(zlib.compress(data)).decode('ascii')
 
 
-def decode_model(data: Optional[str]) -> object:
+def decode_model_data(data: Optional[str]) -> bytes:
     if data is not None:
-        return pickle.loads(zlib.decompress(base64.b64decode(data)))
+        return zlib.decompress(base64.b64decode(data))
 
 
 def main():
