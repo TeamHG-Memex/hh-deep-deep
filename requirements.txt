@@ -1,1 +1,2 @@
+joblib==0.10.2
 kafka-python==1.3.1
