@@ -9,7 +9,7 @@ import zlib
 
 from kafka import KafkaConsumer, KafkaProducer
 
-from .utils import configure_logging
+from .utils import configure_logging, log_ignore_exception
 from .crawl import CrawlProcess
 
 
@@ -21,6 +21,8 @@ class Service:
         kafka_kwargs = {}
         if kafka_host is not None:
             kafka_kwargs['bootstrap_servers'] = kafka_host
+        # Together with consumer_timeout_ms, this defines responsiveness.
+        self.check_updates_every = 50
         self.consumer = KafkaConsumer(
             self.input_topic,
             consumer_timeout_ms=200,
@@ -32,7 +34,9 @@ class Service:
         self.running = CrawlProcess.load_all_running(**self.cp_kwargs)
 
     def run(self) -> None:
+        counter = 0
         while True:
+            counter += 1
             for message in self.consumer:
                 try:
                     value = json.loads(message.value.decode('utf8'))
@@ -56,7 +60,8 @@ class Service:
                     logging.error(
                         'Dropping a message in unknown format: {}'
                         .format(pformat(value)))
-            self.send_updates()
+            if counter % self.check_updates_every == 0:
+                self.send_updates()
             self.consumer.commit()
 
     def send_result(self, topic: str, result: Dict) -> None:
@@ -65,6 +70,7 @@ class Service:
         self.producer.send(topic, result)
         self.producer.flush()
 
+    @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
         id_ = request['id']
         current_process = self.running.get(id_)
@@ -78,6 +84,7 @@ class Service:
         process.start()
         self.running[id_] = process
 
+    @log_ignore_exception
     def stop_crawl(self, request: Dict) -> None:
         id_ = request['id']
         process = self.running.get(id_)
@@ -87,8 +94,36 @@ class Service:
         else:
             logging.info('Crawl with id "{}" is not running'.format(id_))
 
+    @log_ignore_exception
     def send_updates(self):
-        pass # TODO
+        for id_, process in self.running.items():
+            updates = process.get_updates()
+            if updates is not None:
+                progress, page_urls = updates
+                logging.info('Sending update for "{}": {}'.format(id_, progress))
+                self.producer.send(
+                    '{}-progress'.format(self.output_topic),
+                    {
+                        'id': id_,
+                        'progress': progress,
+                    })
+                if page_urls:
+                    logging.info('Sending {} sample urls for "{}"'
+                                 .format(len(page_urls), id_))
+                    self.producer.send(
+                        '{}-pages'.format(self.output_topic),
+                        {
+                            'id': id_,
+                            'page_samples': page_urls,
+                        })
+            new_model_data = process.get_new_model()
+            if new_model_data is not None:
+                self.producer.send(
+                    '{}-model'.format(self.output_topic),
+                    {
+                        'id': id_,
+                        'model': encode_model_data(new_model_data),
+                    })
 
 
 def encode_message(message: Dict) -> bytes:
