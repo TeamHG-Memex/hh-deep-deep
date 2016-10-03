@@ -8,9 +8,9 @@ from typing import Dict, List
 
 class CrawlProcess:
     jobs_root = Path('jobs')
-    deep_deep_image = 'deep-deep'  # FIXME?
 
-    def __init__(self, *, id_: str, seeds: List[str], page_clf_data: bytes):
+    def __init__(self, *, id_: str, seeds: List[str], page_clf_data: bytes,
+                 deep_deep_image=None):
         self.pid = None
         self.id_ = id_
         self.seeds = seeds
@@ -18,9 +18,10 @@ class CrawlProcess:
         self.root = (self.jobs_root /
                      hashlib.md5(id_.encode('utf8')).hexdigest()
                      ).absolute()
+        self.deep_deep_image = deep_deep_image or 'deep-deep'
 
     @classmethod
-    def load_all_running(cls) -> Dict[str, 'CrawlProcess']:
+    def load_all_running(cls, **kwargs) -> Dict[str, 'CrawlProcess']:
         """ Return a dictionary of currently running processes.
         """
         # TODO - load state from disk

@@ -17,7 +17,7 @@ class Service:
     input_topic = 'dd-trainer-input'
     output_topic = 'dd-trainer-output'
 
-    def __init__(self, kafka_host=None):
+    def __init__(self, kafka_host=None, deep_deep_image=None):
         kafka_kwargs = {}
         if kafka_host is not None:
             kafka_kwargs['bootstrap_servers'] = kafka_host
@@ -28,7 +28,8 @@ class Service:
         self.producer = KafkaProducer(
             value_serializer=encode_message,
             **kafka_kwargs)
-        self.running = CrawlProcess.load_all_running()
+        self.cp_kwargs = {'deep_deep_image': deep_deep_image}
+        self.running = CrawlProcess.load_all_running(**self.cp_kwargs)
 
     def run(self) -> None:
         while True:
@@ -71,7 +72,9 @@ class Service:
             current_process.stop()
         seeds = request['seeds']
         page_clf_data = decode_model_data(request['page_model'])
-        process = CrawlProcess(id_=id_, seeds=seeds, page_clf_data=page_clf_data)
+        process = CrawlProcess(
+            id_=id_, seeds=seeds, page_clf_data=page_clf_data,
+            **self.cp_kwargs)
         process.start()
         self.running[id_] = process
 
@@ -108,9 +111,12 @@ def main():
     parser = argparse.ArgumentParser()
     arg = parser.add_argument
     arg('--kafka-host')
+    arg('--deep-deep-image', default='deep-deep',
+        help='Name of docker image for deep-deep')
     args = parser.parse_args()
 
     configure_logging()
-    service = Service(kafka_host=args.kafka_host)
+    service = Service(
+        kafka_host=args.kafka_host, deep_deep_image=args.deep_deep_image)
     logging.info('Starting hh deep-deep service')
     service.run()
