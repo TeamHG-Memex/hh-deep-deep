@@ -56,6 +56,12 @@ class CrawlProcess:
         self.root.joinpath('pid.txt').write_text(self.pid)
 
     def stop(self):
-        pass  # TODO
-
+        if self.pid:
+            subprocess.check_output(['docker', 'stop', self.pid])
+            logging.info('Crawl stopped, removing container')
+            subprocess.check_output(['docker', 'rm', self.pid])
+            logging.info('Removed container id {}'.format(self.pid))
+            self.pid = None
+        else:
+            logging.info('Can not stop crawl: it is not running')
 

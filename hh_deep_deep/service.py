@@ -84,6 +84,8 @@ class Service:
         if process is not None:
             process.stop()
             self.running.pop(id_)
+        else:
+            logging.info('Crawl with id "{}" is not running'.format(id_))
 
     def send_updates(self):
         pass # TODO
