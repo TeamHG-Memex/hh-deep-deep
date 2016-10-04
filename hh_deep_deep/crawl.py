@@ -127,16 +127,7 @@ class CrawlProcess:
             return 'Craw is not running yet', []
         last_item = get_last_valid_item(str(self.paths.items))
         if last_item is not None:
-            url = last_item.pop('url', None)
-            if url:
-                # TODO - get score
-                pages = [{'url': url, 'score': 80}]
-            else:
-                pages = []
-            # TODO - format a nice message
-            progress = '\n'.join(
-                '{}: {}'.format(k, v) for k, v in last_item.items())
-            return progress, pages
+            return get_updates_from_item(last_item)
         else:
             return 'Crawl started, no updates yet', []
 
@@ -181,3 +172,19 @@ def get_last_valid_item(gzip_path: str) -> Optional[Dict]:
                     return json.loads(line)
                 except Exception:
                     pass
+
+
+def get_updates_from_item(last_item):
+    url = last_item.pop('url', None)
+    if url:
+        page_item = {'url': url}
+        reward = last_item.pop('reward', None)  # type: Optional[float]
+        if reward is not None:
+            page_item['score'] = 100 * reward
+        pages = [page_item]
+    else:
+        pages = []
+    # TODO - format a nice message
+    progress = '\n'.join(
+        '{}: {}'.format(k, v) for k, v in last_item.items())
+    return progress, pages
