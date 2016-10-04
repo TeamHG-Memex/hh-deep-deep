@@ -4,6 +4,7 @@ import json
 import hashlib
 import logging
 from pathlib import Path
+import re
 import subprocess
 import time
 from typing import Dict, List, Optional, Tuple
@@ -26,7 +27,7 @@ class CrawlProcess:
             )).absolute()
         self.deep_deep_image = deep_deep_image or 'deep-deep'
         self.last_updates = None  # last update sent in self.get_updates
-        self.last_model = None  # last model sent in self.get_new_model
+        self.last_model_file = None  # last model sent in self.get_new_model
 
     @classmethod
     def load_all_running(cls, **kwargs) -> Dict[str, 'CrawlProcess']:
@@ -88,7 +89,8 @@ class CrawlProcess:
         if last_item is not None:
             url = last_item.pop('url', None)
             # TODO - format a nice message
-            progress = '\n'.join('{}: {}'.format(k, v) for k, v in last_item.items())
+            progress = '\n'.join(
+                '{}: {}'.format(k, v) for k, v in last_item.items())
             return progress, ([url] if url else [])
         else:
             return 'Crawl started, no updates yet', []
@@ -96,8 +98,15 @@ class CrawlProcess:
     def get_new_model(self) -> Optional[bytes]:
         """ Return a data of the new model (if there is any), or None.
         """
-        # import IPython; IPython.embed()
-        pass # TODO
+        model_files = sorted(
+            self.root.glob('Q-*.joblib'),
+            key=lambda p: int(re.match(r'Q-(\d+)\.joblib', p.name).groups()[0])
+        )
+        if model_files:
+            model_file = model_files[-1]
+            if model_file != self.last_model_file:
+                self.last_model_file = model_file
+                return model_file.read_bytes()
 
 
 def get_last_valid_item(gzip_path: str) -> Optional[Dict]:

@@ -118,11 +118,14 @@ class Service:
                         })
             new_model_data = process.get_new_model()
             if new_model_data is not None:
+                encoded_model = encode_model_data(new_model_data)
+                logging.info('Sending new model, model size {:,} bytes'
+                             .format(len(encoded_model)))
                 self.producer.send(
                     '{}-model'.format(self.output_topic),
                     {
                         'id': id_,
-                        'model': encode_model_data(new_model_data),
+                        'model': encoded_model,
                     })
 
 
