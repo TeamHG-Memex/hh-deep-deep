@@ -107,8 +107,8 @@ class CrawlProcess:
             logging.info('Crawl stopped, removing container')
             subprocess.check_output(['docker', 'rm', self.pid])
             self.paths.pid.unlink()
-            self.pid = None
             logging.info('Removed container id {}'.format(self.pid))
+            self.pid = None
         else:
             logging.info('Can not stop crawl: it is not running')
 
