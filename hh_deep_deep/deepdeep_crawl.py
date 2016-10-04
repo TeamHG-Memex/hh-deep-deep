@@ -10,11 +10,11 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 
-class CrawlProcess:
+class DeepDeepProcess:
     jobs_root = Path('jobs')
 
     def __init__(self, *, id_: str, seeds: List[str], page_clf_data: bytes,
-                 deep_deep_image=None, pid=None, root=None):
+                 docker_image=None, pid=None, root=None):
         self.pid = pid
         self.id_ = id_
         self.seeds = seeds
@@ -25,12 +25,12 @@ class CrawlProcess:
                 hashlib.md5(id_.encode('utf8')).hexdigest()[:12]
             ))
         self.paths = CrawlPaths(root)
-        self.deep_deep_image = deep_deep_image or 'deep-deep'
+        self.docker_image = docker_image or 'deep-deep'
         self.last_updates = None  # last update sent in self.get_updates
         self.last_model_file = None  # last model sent in self.get_new_model
 
     @classmethod
-    def load_all_running(cls, **kwargs) -> Dict[str, 'CrawlProcess']:
+    def load_all_running(cls, **kwargs) -> Dict[str, 'DeepDeepProcess']:
         """ Return a dictionary of currently running processes.
         """
         running = {}
@@ -45,7 +45,7 @@ class CrawlProcess:
         return running
 
     @classmethod
-    def load_running(cls, root: Path, **kwargs) -> Optional['CrawlProcess']:
+    def load_running(cls, root: Path, **kwargs) -> Optional['DeepDeepProcess']:
         """ Initialize a process from a directory.
         """
         paths = CrawlPaths(root)
@@ -86,7 +86,7 @@ class CrawlProcess:
         args = [
             'docker', 'run', '-d',
             '-v', '{}:{}'.format(self.paths.root, '/job'),
-            self.deep_deep_image,
+            self.docker_image,
             'scrapy', 'crawl', 'relevant',
             '-a', 'seeds_url=/job/{}'.format(self.paths.seeds.name),
             '-a', 'checkpoint_path=/job',

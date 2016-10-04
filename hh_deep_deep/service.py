@@ -9,29 +9,33 @@ import zlib
 
 from kafka import KafkaConsumer, KafkaProducer
 
+from .deepdeep_crawl import DeepDeepProcess
+from .dd_crawl import DDCrawlerProcess
 from .utils import configure_logging, log_ignore_exception
-from .crawl import CrawlProcess
 
 
 class Service:
-    input_topic = 'dd-trainer-input'
-    output_topic = 'dd-trainer-output'
-
-    def __init__(self, kafka_host=None, deep_deep_image=None):
+    def __init__(self, queue_kind: str,
+                 kafka_host: str=None, docker_image: str=None):
+        self.queue_kind = queue_kind
+        self.process_class = {
+            'trainer': DeepDeepProcess,
+            'crawler': DDCrawlerProcess,
+            }[queue_kind]
         kafka_kwargs = {}
         if kafka_host is not None:
             kafka_kwargs['bootstrap_servers'] = kafka_host
         # Together with consumer_timeout_ms, this defines responsiveness.
         self.check_updates_every = 50
         self.consumer = KafkaConsumer(
-            self.input_topic,
+            'dd-{}-input'.format(self.queue_kind),
             consumer_timeout_ms=200,
             **kafka_kwargs)
         self.producer = KafkaProducer(
             value_serializer=encode_message,
             **kafka_kwargs)
-        self.cp_kwargs = {'deep_deep_image': deep_deep_image}
-        self.running = CrawlProcess.load_all_running(**self.cp_kwargs)
+        self.cp_kwargs = {'docker_image': docker_image}
+        self.running = self.process_class.load_all_running(**self.cp_kwargs)
         if self.running:
             for id_, process in sorted(self.running.items()):
                 logging.info(
@@ -87,7 +91,7 @@ class Service:
             current_process.stop()
         seeds = request['seeds']
         page_clf_data = decode_model_data(request['page_model'])
-        process = CrawlProcess(
+        process = self.process_class(
             id_=id_, seeds=seeds, page_clf_data=page_clf_data,
             **self.cp_kwargs)
         process.start()
@@ -105,13 +109,15 @@ class Service:
 
     @log_ignore_exception
     def send_updates(self):
+        topic = lambda kind: 'dd-{}-{}'.format(self.queue_kind, kind)
         for id_, process in self.running.items():
             updates = process.get_updates()
             if updates is not None:
                 progress, page_urls = updates
-                logging.info('Sending update for "{}": {}'.format(id_, progress))
+                logging.info(
+                    'Sending update for "{}": {}'.format(id_, progress))
                 self.producer.send(
-                    '{}-progress'.format(self.output_topic),
+                    topic('progress'),
                     {
                         'id': id_,
                         'progress': progress,
@@ -120,7 +126,7 @@ class Service:
                     logging.info('Sending {} sample urls for "{}"'
                                  .format(len(page_urls), id_))
                     self.producer.send(
-                        '{}-pages'.format(self.output_topic),
+                        topic('pages'),
                         {
                             'id': id_,
                             'page_sample': page_urls,
@@ -131,7 +137,7 @@ class Service:
                 logging.info('Sending new model, model size {:,} bytes'
                              .format(len(encoded_model)))
                 self.producer.send(
-                    '{}-model'.format(self.output_topic),
+                    topic('model'),
                     {
                         'id': id_,
                         'model': encoded_model,
@@ -159,13 +165,13 @@ def decode_model_data(data: Optional[str]) -> bytes:
 def main():
     parser = argparse.ArgumentParser()
     arg = parser.add_argument
+    arg('kind', choices=['trainer', 'crawler'])
+    arg('--docker-image', help='Name of docker image for the crawler')
     arg('--kafka-host')
-    arg('--deep-deep-image', default='deep-deep',
-        help='Name of docker image for deep-deep')
     args = parser.parse_args()
 
     configure_logging()
     service = Service(
-        kafka_host=args.kafka_host, deep_deep_image=args.deep_deep_image)
-    logging.info('Starting hh deep-deep service')
+        args.kind, kafka_host=args.kafka_host, docker_image=args.docker_image)
+    logging.info('Starting hh dd-{} service'.format(args.kind))
     service.run()

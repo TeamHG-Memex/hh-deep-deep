@@ -1,0 +1,2 @@
+class DDCrawlerProcess:
+    pass

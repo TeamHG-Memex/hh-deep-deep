@@ -1,4 +1,4 @@
-from hh_deep_deep.crawl import get_updates_from_item
+from hh_deep_deep.deepdeep_crawl import get_updates_from_item
 
 
 def test_get_updates_from_item():
