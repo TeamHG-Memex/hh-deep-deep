@@ -174,17 +174,26 @@ def get_last_valid_item(gzip_path: str) -> Optional[Dict]:
                     pass
 
 
-def get_updates_from_item(last_item):
-    url = last_item.pop('url', None)
+def get_updates_from_item(item):
+    url = item.pop('url', None)
     if url:
         page_item = {'url': url}
-        reward = last_item.pop('reward', None)  # type: Optional[float]
+        reward = item.pop('reward', None)  # type: Optional[float]
         if reward is not None:
             page_item['score'] = 100 * reward
         pages = [page_item]
     else:
         pages = []
-    # TODO - format a nice message
-    progress = '\n'.join(
-        '{}: {}'.format(k, v) for k, v in last_item.items())
+    progress = (
+        '{pages} pages processed from {domains_processed} domains, '
+        'average score {score:.1f}, '
+        '{enqueued} requests enqueued, {domains_open} domains open.'
+        .format(
+            pages=item.get('processed', '?'),
+            domains_processed=item.get('domains_processed', '?'),
+            score=(100 * item['return'] / item['t']) if item.get('t') else '?',
+            enqueued=item.get('enqueued', '?'),
+            domains_open=item.get('domains_open', '?'),
+        )
+    )
     return progress, pages
