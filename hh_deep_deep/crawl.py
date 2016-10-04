@@ -34,13 +34,14 @@ class CrawlProcess:
         """ Return a dictionary of currently running processes.
         """
         running = {}
-        for job_root in sorted(cls.jobs_root.iterdir()):
-            process = cls.load_running(job_root, **kwargs)
-            if process is not None:
-                old_process = running.get(process.id_)
-                if old_process is not None:
-                    old_process.stop()
-                running[process.id_] = process
+        if cls.jobs_root.exists():
+            for job_root in sorted(cls.jobs_root.iterdir()):
+                process = cls.load_running(job_root, **kwargs)
+                if process is not None:
+                    old_process = running.get(process.id_)
+                    if old_process is not None:
+                        old_process.stop()
+                    running[process.id_] = process
         return running
 
     @classmethod
