@@ -1,48 +1,22 @@
 import csv
-import gzip
 import json
-import hashlib
 import logging
 from pathlib import Path
 import re
 import subprocess
-import time
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
+
+from .crawl_utils import CrawlPaths, get_last_valid_item, CrawlProcess
 
 
-class DeepDeepProcess:
-    jobs_root = Path('jobs')
+class DeepDeepProcess(CrawlProcess):
+    jobs_root = Path('deep-deep-jobs')
+    default_docker_image = 'deep-deep'
 
-    def __init__(self, *, id_: str, seeds: List[str], page_clf_data: bytes,
-                 docker_image=None, pid=None, root=None):
-        self.pid = pid
-        self.id_ = id_
-        self.seeds = seeds
+    def __init__(self, *, page_clf_data: bytes, **kwargs):
+        super().__init__(**kwargs)
         self.page_clf_data = page_clf_data
-        root = root or self.jobs_root.joinpath(
-            '{}_{}'.format(
-                int(time.time()),
-                hashlib.md5(id_.encode('utf8')).hexdigest()[:12]
-            ))
-        self.paths = CrawlPaths(root)
-        self.docker_image = docker_image or 'deep-deep'
-        self.last_updates = None  # last update sent in self.get_updates
         self.last_model_file = None  # last model sent in self.get_new_model
-
-    @classmethod
-    def load_all_running(cls, **kwargs) -> Dict[str, 'DeepDeepProcess']:
-        """ Return a dictionary of currently running processes.
-        """
-        running = {}
-        if cls.jobs_root.exists():
-            for job_root in sorted(cls.jobs_root.iterdir()):
-                process = cls.load_running(job_root, **kwargs)
-                if process is not None:
-                    old_process = running.get(process.id_)
-                    if old_process is not None:
-                        old_process.stop()
-                    running[process.id_] = process
-        return running
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DeepDeepProcess']:
@@ -78,7 +52,7 @@ class DeepDeepProcess:
 
     def start(self):
         assert self.pid is None
-        self.paths.root.mkdir(parents=True, exist_ok=True)
+        self.paths.mkdir()
         self.paths.id.write_text(self.id_)
         self.paths.page_clf.write_bytes(self.page_clf_data)
         with self.paths.seeds.open('wt') as f:
@@ -113,16 +87,6 @@ class DeepDeepProcess:
         else:
             logging.info('Can not stop crawl: it is not running')
 
-    def get_updates(self) -> Optional[Tuple[str, List[str]]]:
-        """ Return a tuple of progress update, and a list (possibly empty)
-        of sample crawled urls.
-        If nothing changed from the last time, return None.
-        """
-        updates = self._get_updates()
-        if updates != self.last_updates:
-            self.last_updates = updates
-            return updates
-
     def _get_updates(self) -> Tuple[str, List[str]]:
         if not self.paths.items.exists():
             return 'Craw is not running yet', []
@@ -144,35 +108,6 @@ class DeepDeepProcess:
             if model_file != self.last_model_file:
                 self.last_model_file = model_file
                 return model_file.read_bytes()
-
-
-class CrawlPaths:
-    def __init__(self, root: Path):
-        root = root.absolute()
-        self.root = root
-        self.id = root.joinpath('id.txt')
-        self.pid = root.joinpath('pid.txt')
-        self.page_clf = root.joinpath('page_clf.joblib')
-        self.seeds = root.joinpath('seeds.csv')
-        self.items = root.joinpath('items.jl.gz')
-
-
-def get_last_valid_item(gzip_path: str) -> Optional[Dict]:
-    # TODO - make it more efficient, skip to the end of the file
-    with gzip.open(gzip_path, 'rt') as f:
-        prev_line = cur_line = None
-        try:
-            for line in f:
-                prev_line = cur_line
-                cur_line = line
-        except Exception:
-            pass
-        for line in [cur_line, prev_line]:
-            if line is not None:
-                try:
-                    return json.loads(line)
-                except Exception:
-                    pass
 
 
 def get_updates_from_item(item):

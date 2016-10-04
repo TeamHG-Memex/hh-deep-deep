@@ -2,7 +2,6 @@ import argparse
 import base64
 import logging
 import json
-import pickle
 from pprint import pformat
 from typing import Dict, Optional
 import zlib
@@ -62,12 +61,12 @@ class Service:
                     logging.info('Got message to stop (from tests)')
                     return
                 elif all(key in value for key in ['id', 'page_model', 'seeds']):
-                    logging.info(
-                        'Got start crawl message with id "{}"'.format(value['id']))
+                    logging.info('Got start crawl message with id "{}"'
+                                 .format(value['id']))
                     self.start_crawl(value)
                 elif 'id' in value and value.get('stop'):
-                    logging.info(
-                        'Got stop crawl message with id "{}"'.format(value['id']))
+                    logging.info('Got stop crawl message with id "{}"'
+                                 .format(value['id']))
                     self.stop_crawl(value)
                 else:
                     logging.error(
@@ -89,11 +88,12 @@ class Service:
         current_process = self.running.pop(id_, None)
         if current_process is not None:
             current_process.stop()
-        seeds = request['seeds']
-        page_clf_data = decode_model_data(request['page_model'])
-        process = self.process_class(
-            id_=id_, seeds=seeds, page_clf_data=page_clf_data,
-            **self.cp_kwargs)
+        kwargs = dict(self.cp_kwargs)
+        kwargs['seeds'] = request['seeds']
+        kwargs['page_clf_data'] = decode_model_data(request['page_model'])
+        if 'link_model' in request:
+            kwargs['link_model_data'] = decode_model_data(request['link_model'])
+        process = self.process_class(id_=id_, **kwargs)
         process.start()
         self.running[id_] = process
 
@@ -109,39 +109,48 @@ class Service:
 
     @log_ignore_exception
     def send_updates(self):
-        topic = lambda kind: 'dd-{}-{}'.format(self.queue_kind, kind)
         for id_, process in self.running.items():
             updates = process.get_updates()
             if updates is not None:
-                progress, page_urls = updates
-                logging.info(
-                    'Sending update for "{}": {}'.format(id_, progress))
-                self.producer.send(
-                    topic('progress'),
-                    {
-                        'id': id_,
-                        'progress': progress,
-                    })
-                if page_urls:
-                    logging.info('Sending {} sample urls for "{}"'
-                                 .format(len(page_urls), id_))
-                    self.producer.send(
-                        topic('pages'),
-                        {
-                            'id': id_,
-                            'page_sample': page_urls,
-                        })
-            new_model_data = process.get_new_model()
-            if new_model_data is not None:
-                encoded_model = encode_model_data(new_model_data)
-                logging.info('Sending new model, model size {:,} bytes'
-                             .format(len(encoded_model)))
-                self.producer.send(
-                    topic('model'),
-                    {
-                        'id': id_,
-                        'model': encoded_model,
-                    })
+                self.send_progress_update(id_, updates)
+            if hasattr(process, 'get_new_model'):
+                new_model_data = process.get_new_model()
+                if new_model_data is not None:
+                    self.send_model_update(id_, new_model_data)
+
+    def output_topic(self, kind: str) -> str:
+        return 'dd-{}-{}'.format(self.queue_kind, kind)
+
+    def send_progress_update(self, id_: str, updates):
+        progress, page_urls = updates
+        logging.info(
+            'Sending update for "{}": {}'.format(id_, progress))
+        self.producer.send(
+            self.output_topic('progress'),
+            {
+                'id': id_,
+                'progress': progress,
+            })
+        if page_urls:
+            logging.info('Sending {} sample urls for "{}"'
+                         .format(len(page_urls), id_))
+            self.producer.send(
+                self.output_topic('pages'),
+                {
+                    'id': id_,
+                    'page_sample': page_urls,
+                })
+
+    def send_model_update(self, id_: str, new_model_data: bytes):
+        encoded_model = encode_model_data(new_model_data)
+        logging.info('Sending new model, model size {:,} bytes'
+                     .format(len(encoded_model)))
+        self.producer.send(
+            self.output_topic('model'),
+            {
+                'id': id_,
+                'model': encoded_model,
+            })
 
 
 def encode_message(message: Dict) -> bytes:

@@ -1,0 +1,36 @@
+version: '2'
+
+
+volumes:
+  redis-data: {{}}
+
+
+services:
+
+  redis:
+    image: redis:3.0
+    volumes:
+      - redis-data:/data
+      - ./docker/redis.conf:/usr/local/etc/redis/redis.conf
+    command: [redis-server, /usr/local/etc/redis/redis.conf]
+
+  crawler:
+    image: {docker_image}
+    volumes:
+      - ./seeds.txt:/dd_crawler/seeds.txt
+      - ./Q.joblib:/dd_crawler/Q.joblib
+      - ./page_clf.joblib:/dd_crawler/page_clf.joblib
+      - ./out:/out
+    entrypoint:
+      - /dd_crawler/docker/crawl.sh
+      - deepdeep
+      - -a
+      - seeds=/dd_crawler/seeds.txt
+      - -a
+      - clf=/dd_crawler/Q.joblib
+      - -a
+      - page_clf=/dd_crawler/page_clf.joblib
+    dns:
+      - 127.0.0.1
+    links:
+      - redis
