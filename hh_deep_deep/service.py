@@ -123,7 +123,7 @@ class Service:
                         '{}-pages'.format(self.output_topic),
                         {
                             'id': id_,
-                            'page_samples': page_urls,
+                            'page_sample': page_urls,
                         })
             new_model_data = process.get_new_model()
             if new_model_data is not None:
