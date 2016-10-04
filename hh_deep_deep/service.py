@@ -32,6 +32,15 @@ class Service:
             **kafka_kwargs)
         self.cp_kwargs = {'deep_deep_image': deep_deep_image}
         self.running = CrawlProcess.load_all_running(**self.cp_kwargs)
+        if self.running:
+            for id_, process in sorted(self.running.items()):
+                logging.info(
+                    'Already running crawl "{id}", pid {pid} in {root}'
+                    .format(id=id_,
+                            pid=process.pid,
+                            root=process.paths.root))
+        else:
+            logging.info('No crawls running')
 
     def run(self) -> None:
         counter = 0
@@ -54,7 +63,7 @@ class Service:
                     self.start_crawl(value)
                 elif 'id' in value and value.get('stop'):
                     logging.info(
-                        'Got stop crawl meessage with id "{}"'.format(value['id']))
+                        'Got stop crawl message with id "{}"'.format(value['id']))
                     self.stop_crawl(value)
                 else:
                     logging.error(
@@ -73,7 +82,7 @@ class Service:
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
         id_ = request['id']
-        current_process = self.running.get(id_)
+        current_process = self.running.pop(id_, None)
         if current_process is not None:
             current_process.stop()
         seeds = request['seeds']

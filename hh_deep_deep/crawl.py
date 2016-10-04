@@ -14,17 +14,17 @@ class CrawlProcess:
     jobs_root = Path('jobs')
 
     def __init__(self, *, id_: str, seeds: List[str], page_clf_data: bytes,
-                 deep_deep_image=None):
-        self.pid = None
+                 deep_deep_image=None, pid=None, root=None):
+        self.pid = pid
         self.id_ = id_
         self.seeds = seeds
         self.page_clf_data = page_clf_data
-        self.root = (
-            self.jobs_root /
+        root = root or self.jobs_root.joinpath(
             '{}_{}'.format(
                 int(time.time()),
                 hashlib.md5(id_.encode('utf8')).hexdigest()[:12]
-            )).absolute()
+            ))
+        self.paths = CrawlPaths(root)
         self.deep_deep_image = deep_deep_image or 'deep-deep'
         self.last_updates = None  # last update sent in self.get_updates
         self.last_model_file = None  # last model sent in self.get_new_model
@@ -33,41 +33,82 @@ class CrawlProcess:
     def load_all_running(cls, **kwargs) -> Dict[str, 'CrawlProcess']:
         """ Return a dictionary of currently running processes.
         """
-        # TODO - load state from disk
-        return {}
+        running = {}
+        for job_root in sorted(cls.jobs_root.iterdir()):
+            process = cls.load_running(job_root, **kwargs)
+            if process is not None:
+                old_process = running.get(process.id_)
+                if old_process is not None:
+                    old_process.stop()
+                running[process.id_] = process
+        return running
+
+    @classmethod
+    def load_running(cls, root: Path, **kwargs) -> Optional['CrawlProcess']:
+        """ Initialize a process from a directory.
+        """
+        paths = CrawlPaths(root)
+        if not all(p.exists() for p in [
+                paths.id, paths.pid, paths.seeds, paths.page_clf]):
+            return
+        pid = paths.pid.read_text()
+        try:
+            inspect_result = json.loads(subprocess.check_output(
+                ['docker', 'inspect', pid]).decode('utf8'))
+        except subprocess.CalledProcessError:
+            paths.pid.unlink()
+            return
+        assert len(inspect_result) == 1
+        state = inspect_result[0]['State']
+        if not state.get('Running'):
+            # Remove stopped crawl container and pid file
+            paths.pid.unlink()
+            subprocess.check_output(['docker', 'rm', pid])
+            return
+        with paths.seeds.open('rt') as f:
+            seeds = [url for url, in csv.reader(f)]
+        return cls(
+            pid=pid,
+            id_=paths.id.read_text(),
+            seeds=seeds,
+            page_clf_data=paths.page_clf.read_bytes(),
+            root=root,
+            **kwargs)
 
     def start(self):
-        self.root.mkdir(parents=True, exist_ok=True)
-        self.root.joinpath('id.txt').write_text(self.id_)
-        self.root.joinpath('page_clf.joblib').write_bytes(self.page_clf_data)
-        with self.root.joinpath('seeds.csv').open('wt') as f:
+        assert self.pid is None
+        self.paths.root.mkdir(parents=True, exist_ok=True)
+        self.paths.id.write_text(self.id_)
+        self.paths.page_clf.write_bytes(self.page_clf_data)
+        with self.paths.seeds.open('wt') as f:
             csv.writer(f).writerows([url] for url in self.seeds)
         args = [
             'docker', 'run', '-d',
-            '-v', '{}:{}'.format(self.root, '/job'),
+            '-v', '{}:{}'.format(self.paths.root, '/job'),
             self.deep_deep_image,
             'scrapy', 'crawl', 'relevant',
-            '-a', 'seeds_url=/job/seeds.csv',
+            '-a', 'seeds_url=/job/{}'.format(self.paths.seeds.name),
             '-a', 'checkpoint_path=/job',
-            '-a', 'classifier_path=/job/page_clf.joblib',
+            '-a', 'classifier_path=/job/{}'.format(self.paths.page_clf.name),
             '-o', 'gzip:/job/items.jl',
             '-a', 'export_cdr=0',
             '--logfile', '/job/spider.log',
             '-L', 'INFO',
             '-s', 'CLOSESPIDER_ITEMCOUNT=1000000',
         ]
-        logging.info('Starting crawl in {}'.format(self.root))
+        logging.info('Starting crawl in {}'.format(self.paths.root))
         self.pid = subprocess.check_output(args).decode('utf8').strip()
         logging.info('Crawl started, container id {}'.format(self.pid))
-        self.root.joinpath('pid.txt').write_text(self.pid)
+        self.paths.pid.write_text(self.pid)
 
     def stop(self):
         if self.pid:
             subprocess.check_output(['docker', 'stop', self.pid])
             logging.info('Crawl stopped, removing container')
             subprocess.check_output(['docker', 'rm', self.pid])
-            logging.info('Removed container id {}'.format(self.pid))
+            self.paths.pid.unlink()
             self.pid = None
+            logging.info('Removed container id {}'.format(self.pid))
         else:
             logging.info('Can not stop crawl: it is not running')
 
@@ -82,10 +123,9 @@ class CrawlProcess:
             return updates
 
     def _get_updates(self) -> Tuple[str, List[str]]:
-        items_path = self.root / 'items.jl.gz'
-        if not items_path.exists():
+        if not self.paths.items.exists():
             return 'Craw is not running yet', []
-        last_item = get_last_valid_item(str(items_path))
+        last_item = get_last_valid_item(str(self.paths.items))
         if last_item is not None:
             url = last_item.pop('url', None)
             # TODO - format a nice message
@@ -99,7 +139,7 @@ class CrawlProcess:
         """ Return a data of the new model (if there is any), or None.
         """
         model_files = sorted(
-            self.root.glob('Q-*.joblib'),
+            self.paths.root.glob('Q-*.joblib'),
             key=lambda p: int(re.match(r'Q-(\d+)\.joblib', p.name).groups()[0])
         )
         if model_files:
@@ -107,6 +147,17 @@ class CrawlProcess:
             if model_file != self.last_model_file:
                 self.last_model_file = model_file
                 return model_file.read_bytes()
+
+
+class CrawlPaths:
+    def __init__(self, root: Path):
+        root = root.absolute()
+        self.root = root
+        self.id = root.joinpath('id.txt')
+        self.pid = root.joinpath('pid.txt')
+        self.page_clf = root.joinpath('page_clf.joblib')
+        self.seeds = root.joinpath('seeds.csv')
+        self.items = root.joinpath('items.jl.gz')
 
 
 def get_last_valid_item(gzip_path: str) -> Optional[Dict]:
