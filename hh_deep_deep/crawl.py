@@ -128,10 +128,15 @@ class CrawlProcess:
         last_item = get_last_valid_item(str(self.paths.items))
         if last_item is not None:
             url = last_item.pop('url', None)
+            if url:
+                # TODO - get score
+                pages = [{'url': url, 'score': 80}]
+            else:
+                pages = []
             # TODO - format a nice message
             progress = '\n'.join(
                 '{}: {}'.format(k, v) for k, v in last_item.items())
-            return progress, ([url] if url else [])
+            return progress, pages
         else:
             return 'Crawl started, no updates yet', []
 

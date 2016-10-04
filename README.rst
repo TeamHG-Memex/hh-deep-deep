@@ -37,8 +37,8 @@ Outgoing: send sample of crawled pages, ``dd-trainer-output-pages``::
     {
       "id": "some crawl id",
       "page_sample": [
-        "http://example1.com",
-        "http://example2.com"
+        {"url": "http://example1.com", "score": 80},
+        {"url": "http://example2.com", "score": 90}
       ]
     }
 
