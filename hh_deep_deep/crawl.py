@@ -185,15 +185,15 @@ def get_updates_from_item(item):
     else:
         pages = []
     progress = (
-        '{pages} pages processed from {domains_processed} domains, '
+        '{pages:,} pages processed from {domains_processed:,} domains, '
         'average score {score:.1f}, '
-        '{enqueued} requests enqueued, {domains_open} domains open.'
+        '{enqueued:,} requests enqueued, {domains_open:,} domains open.'
         .format(
-            pages=item.get('processed', '?'),
-            domains_processed=item.get('domains_processed', '?'),
-            score=(100 * item['return'] / item['t']) if item.get('t') else '?',
-            enqueued=item.get('enqueued', '?'),
-            domains_open=item.get('domains_open', '?'),
+            pages=item.get('processed', 0),
+            domains_processed=item.get('domains_processed', 0),
+            score=(100 * item['return'] / item['t']) if item.get('t') else 0,
+            enqueued=item.get('enqueued', 0),
+            domains_open=item.get('domains_open', 0),
         )
     )
     return progress, pages

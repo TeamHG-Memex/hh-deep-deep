@@ -23,8 +23,15 @@ def test_get_updates_from_item():
     }
     progress, pages = get_updates_from_item(item)
     assert pages == [{'url': 'http://example.com', 'score': 80.25}]
-    assert isinstance(progress, str)
     assert progress == (
-        '6109 pages processed from 50 domains, '
+        '6,109 pages processed from 50 domains, '
         'average score 56.4, '
-        '837766 requests enqueued, 32958 domains open.')
+        '837,766 requests enqueued, 32,958 domains open.')
+
+    item.pop('domains_processed')
+    progress, pages = get_updates_from_item({})
+    assert pages == []
+    assert progress == (
+        '0 pages processed from 0 domains, '
+        'average score 0.0, '
+        '0 requests enqueued, 0 domains open.')
