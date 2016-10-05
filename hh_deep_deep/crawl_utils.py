@@ -1,6 +1,3 @@
-from collections import deque
-import json
-import gzip
 import hashlib
 from pathlib import Path
 import math
@@ -25,24 +22,6 @@ class CrawlPaths:
 
     def mkdir(self):
         self.root.mkdir(parents=True, exist_ok=True)
-
-
-def get_last_valid_items(gzip_path: str, n_last: int) -> List[Dict]:
-    # TODO - make it more efficient, skip to the end of the file
-    buffer = deque(maxlen=n_last + 1)
-    with gzip.open(gzip_path, 'rt') as f:
-        try:
-            for line in f:
-                buffer.append(line)
-        except Exception:
-            pass
-    results = []
-    for line in reversed(buffer):
-        try:
-            results.append(json.loads(line))
-        except Exception:
-            pass
-    return results[:n_last]
 
 
 class CrawlProcess:

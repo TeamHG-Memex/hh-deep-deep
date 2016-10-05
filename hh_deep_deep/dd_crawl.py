@@ -1,8 +1,11 @@
+from collections import deque
+import csv
 import logging
 from pathlib import Path
+import math
 import multiprocessing
 import subprocess
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 
 from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path
 
@@ -34,7 +37,23 @@ class DDCrawlerProcess(CrawlProcess):
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
         """ Initialize a process from a directory.
         """
-        return None  # TODO
+        return None
+        # TODO - check if the process is actually running
+        paths = DDCrawlerPaths(root)
+        if not all(p.exists() for p in [
+                paths.id, paths.seeds, paths.page_clf, paths.link_clf]):
+            return
+        with paths.seeds.open('rt') as f:
+            seeds = [line.strip() for line in f]
+        id_ = paths.id.read_text()
+        return cls(
+            pid=id_,
+            id_=id_,
+            seeds=seeds,
+            page_clf_data=paths.page_clf.read_bytes(),
+            link_clf_data=paths.link_clf.read_bytes(),
+            root=root,
+            **kwargs)
 
     def start(self):
         assert self.pid is None
@@ -71,8 +90,24 @@ class DDCrawlerProcess(CrawlProcess):
         self.pid = None
 
     def _get_updates(self) -> Tuple[str, List[str]]:
-        return 'TODO', []
+        n_last = self.get_n_last()
+        csv_paths = list(self.paths.out.glob('*.csv'))
+        n_last_per_file = math.ceil(n_last / len(csv_paths))
+        last_lines = []
+        for csv_path in csv_paths:
+            for ts, url, _, _, score in get_last_csv_lines(
+                    csv_path, n_last_per_file):
+                last_lines.append((float(ts), url, float(score)))
+        last_lines.sort(key=lambda x: x[0])
+        last_lines = last_lines[-n_last:]
+        return 'TODO', [{'url': url, 'score': 100 * score}
+                        for _, url, score in last_lines]
 
     def _compose_cmd(self, *args):
         subprocess.check_call(
             ['docker-compose'] + list(args), cwd=str(self.paths.root))
+
+
+def get_last_csv_lines(csv_path: Path, n_last: int) -> List[Dict]:
+    # TODO - more efficient, skip to the end of file
+    return list(csv.reader(deque(csv_path.open('rt'), maxlen=n_last)))

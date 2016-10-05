@@ -1,13 +1,14 @@
+from collections import deque
 import csv
 import json
+import gzip
 import logging
 from pathlib import Path
 import re
 import subprocess
 from typing import Dict, List, Optional, Tuple
 
-from .crawl_utils import (
-    CrawlPaths, get_last_valid_items, CrawlProcess, gen_job_path)
+from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path
 
 
 class DeepDeepPaths(CrawlPaths):
@@ -101,7 +102,7 @@ class DeepDeepProcess(CrawlProcess):
         if not self.paths.items.exists():
             return 'Craw is not running yet', []
         n_last = self.get_n_last()
-        last_items = get_last_valid_items(str(self.paths.items), n_last)
+        last_items = get_last_valid_jl_items(self.paths.items, n_last)
         if last_items:
             progress = get_progress_from_item(last_items[-1])
             pages = [get_sample_from_item(item) for item in last_items
@@ -148,3 +149,21 @@ def get_progress_from_item(item):
         )
     )
     return progress
+
+
+def get_last_valid_jl_items(gzip_path: Path, n_last: int) -> List[Dict]:
+    # TODO - make it more efficient, skip to the end of the file
+    last_lines = deque(maxlen=n_last + 1)
+    with gzip.open(str(gzip_path), 'rt') as f:
+        try:
+            for line in f:
+                last_lines.append(line)
+        except Exception:
+            pass
+    last_items = []
+    for line in reversed(last_lines):
+        try:
+            last_items.append(json.loads(line))
+        except Exception:
+            pass
+    return last_items[:n_last]
