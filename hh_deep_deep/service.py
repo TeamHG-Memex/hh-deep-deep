@@ -19,6 +19,10 @@ class Service:
     def __init__(self, queue_kind: str,
                  kafka_host: str=None, docker_image: str=None):
         self.queue_kind = queue_kind
+        self.required_keys = ['id', 'seeds'] + {
+            'trainer': ['page_model'],
+            'crawler': ['page_model', 'link_model'],
+            }[queue_kind]
         self.process_class = {
             'trainer': DeepDeepProcess,
             'crawler': DDCrawlerProcess,
@@ -64,7 +68,7 @@ class Service:
                 if value == {'from-tests': 'stop'}:
                     logging.info('Got message to stop (from tests)')
                     return
-                elif all(key in value for key in ['id', 'page_model', 'seeds']):
+                elif all(key in value for key in self.required_keys):
                     logging.info('Got start crawl message with id "{}"'
                                  .format(value['id']))
                     self.start_crawl(value)
@@ -73,9 +77,9 @@ class Service:
                                  .format(value['id']))
                     self.stop_crawl(value)
                 else:
-                    logging.error(
-                        'Dropping a message in unknown format: {}'
-                        .format(pformat(value)))
+                    logging.error('Dropping a message in unknown format: {}'
+                                  .format(value.keys() if hasattr(value, 'keys')
+                                          else type(value)))
             if counter % self.check_updates_every == 0:
                 self.send_updates()
             self.consumer.commit()
@@ -96,7 +100,7 @@ class Service:
         kwargs['seeds'] = request['seeds']
         kwargs['page_clf_data'] = decode_model_data(request['page_model'])
         if 'link_model' in request:
-            kwargs['link_model_data'] = decode_model_data(request['link_model'])
+            kwargs['link_clf_data'] = decode_model_data(request['link_model'])
         process = self.process_class(id_=id_, **kwargs)
         process.start()
         self.running[id_] = process

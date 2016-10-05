@@ -37,7 +37,7 @@ class DDCrawlerProcess(CrawlProcess):
             compose_templates.format(docker_image=self.docker_image))
         self._compose_cmd('up', '-d')
         n_processes = multiprocessing.cpu_count()
-        self._compose_cmd('scale', 'scale', 'crawler={}'.format(n_processes))
+        self._compose_cmd('scale', 'crawler={}'.format(n_processes))
         self.pid = self.id_
 
     def stop(self):
@@ -52,4 +52,4 @@ class DDCrawlerProcess(CrawlProcess):
 
     def _compose_cmd(self, *args):
         subprocess.check_call(
-            ['docker-compose'] + args, cwd=str(self.paths.root))
+            ['docker-compose'] + list(args), cwd=str(self.paths.root))
