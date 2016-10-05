@@ -30,7 +30,7 @@ class Service:
         if kafka_host is not None:
             kafka_kwargs['bootstrap_servers'] = kafka_host
         # Together with consumer_timeout_ms, this defines responsiveness.
-        self.check_updates_every = 5
+        self.check_updates_every = 50
         self.consumer = KafkaConsumer(
             'dd-{}-input'.format(self.queue_kind),
             consumer_timeout_ms=200,
@@ -134,7 +134,6 @@ class Service:
             pages_topic = self.output_topic('pages')
             logging.info('Sending {} sample urls for "{}" to {}'
                          .format(len(page_sample), id_, pages_topic))
-            print(page_sample)
             self.send(pages_topic, {'id': id_, 'page_sample': page_sample})
 
     def send_model_update(self, id_: str, new_model_data: bytes):
