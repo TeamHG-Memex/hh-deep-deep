@@ -148,7 +148,7 @@ class Service:
         topic = self.output_topic('model')
         logging.info('Sending new model to {}, model size {:,} bytes'
                      .format(topic, len(encoded_model)))
-        self.producer.send(topic, {'id': id_, 'model': encoded_model})
+        self.producer.send(topic, {'id': id_, 'link_model': encoded_model})
 
 
 def encode_message(message: Dict) -> bytes:
