@@ -127,38 +127,28 @@ class Service:
                     self.send_model_update(id_, new_model_data)
 
     def output_topic(self, kind: str) -> str:
-        return 'dd-{}-{}'.format(self.queue_kind, kind)
+        return 'dd-{}-output-{}'.format(self.queue_kind, kind)
 
     def send_progress_update(self, id_: str, updates):
         progress, page_urls = updates
-        logging.info(
-            'Sending update for "{}": {}'.format(id_, progress))
+        progress_topic = self.output_topic('progress')
+        logging.info('Sending update for "{}" to {}: {}'
+                     .format(id_, progress_topic, progress))
         self.producer.send(
-            self.output_topic('progress'),
-            {
-                'id': id_,
-                'progress': progress,
-            })
+            progress_topic, {'id': id_, 'progress': progress})
         if page_urls:
-            logging.info('Sending {} sample urls for "{}"'
-                         .format(len(page_urls), id_))
+            pages_topic = self.output_topic('pages')
+            logging.info('Sending {} sample urls for "{}" to {}'
+                         .format(len(page_urls), id_, pages_topic))
             self.producer.send(
-                self.output_topic('pages'),
-                {
-                    'id': id_,
-                    'page_sample': page_urls,
-                })
+                pages_topic, {'id': id_, 'page_sample': page_urls})
 
     def send_model_update(self, id_: str, new_model_data: bytes):
         encoded_model = encode_model_data(new_model_data)
-        logging.info('Sending new model, model size {:,} bytes'
-                     .format(len(encoded_model)))
-        self.producer.send(
-            self.output_topic('model'),
-            {
-                'id': id_,
-                'model': encoded_model,
-            })
+        topic = self.output_topic('model')
+        logging.info('Sending new model to {}, model size {:,} bytes'
+                     .format(topic, len(encoded_model)))
+        self.producer.send(topic, {'id': id_, 'model': encoded_model})
 
 
 def encode_message(message: Dict) -> bytes:
