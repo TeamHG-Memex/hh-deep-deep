@@ -18,11 +18,8 @@ class CrawlPaths:
         root = root.absolute()
         self.root = root
         self.id = root.joinpath('id.txt')
-        self.pid = root.joinpath('pid.txt')
         self.page_clf = root.joinpath('page_clf.joblib')
-        self.link_clf = root.joinpath('Q.joblib')
-        self.seeds = root.joinpath('seeds.csv')
-        self.items = root.joinpath('items.jl.gz')
+        self.seeds = root.joinpath('seeds.txt')
 
     def mkdir(self):
         self.root.mkdir(parents=True, exist_ok=True)
@@ -49,18 +46,16 @@ def get_last_valid_item(gzip_path: str) -> Optional[Dict]:
 class CrawlProcess:
     jobs_root = None
     default_docker_image = None
+    paths_cls = CrawlPaths
 
     def __init__(self, *,
                  id_: str,
                  seeds: List[str],
                  docker_image: str=None,
-                 pid: str=None,
-                 root: Path=None):
+                 pid: str=None):
         self.pid = pid
         self.id_ = id_
         self.seeds = seeds
-        root = root or gen_job_path(id_, self.jobs_root)
-        self.paths = CrawlPaths(root)
         self.docker_image = docker_image or self.default_docker_image
         self.last_updates = None  # last update sent in self.get_updates
 

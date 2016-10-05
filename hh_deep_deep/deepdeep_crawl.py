@@ -6,15 +6,27 @@ import re
 import subprocess
 from typing import List, Optional, Tuple
 
-from .crawl_utils import CrawlPaths, get_last_valid_item, CrawlProcess
+from .crawl_utils import (
+    CrawlPaths, get_last_valid_item, CrawlProcess, gen_job_path)
+
+
+class DeepDeepPaths(CrawlPaths):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.items = self.root.joinpath('items.jl.gz')
+        self.pid = self.root.joinpath('pid.txt')
 
 
 class DeepDeepProcess(CrawlProcess):
     jobs_root = Path('deep-deep-jobs')
     default_docker_image = 'deep-deep'
 
-    def __init__(self, *, page_clf_data: bytes, **kwargs):
+    def __init__(self, *,
+                 page_clf_data: bytes,
+                 root: Path=None,
+                 **kwargs):
         super().__init__(**kwargs)
+        self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.last_model_file = None  # last model sent in self.get_new_model
 
@@ -22,7 +34,7 @@ class DeepDeepProcess(CrawlProcess):
     def load_running(cls, root: Path, **kwargs) -> Optional['DeepDeepProcess']:
         """ Initialize a process from a directory.
         """
-        paths = CrawlPaths(root)
+        paths = DeepDeepPaths(root)
         if not all(p.exists() for p in [
                 paths.id, paths.pid, paths.seeds, paths.page_clf]):
             return
