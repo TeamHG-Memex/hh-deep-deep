@@ -30,7 +30,7 @@ class Service:
         if kafka_host is not None:
             kafka_kwargs['bootstrap_servers'] = kafka_host
         # Together with consumer_timeout_ms, this defines responsiveness.
-        self.check_updates_every = 50
+        self.check_updates_every = 5
         self.consumer = KafkaConsumer(
             'dd-{}-input'.format(self.queue_kind),
             consumer_timeout_ms=200,
@@ -114,8 +114,7 @@ class Service:
     def send_updates(self):
         for id_, process in self.running.items():
             updates = process.get_updates()
-            if updates is not None:
-                self.send_progress_update(id_, updates)
+            self.send_progress_update(id_, updates)
             if hasattr(process, 'get_new_model'):
                 new_model_data = process.get_new_model()
                 if new_model_data is not None:
@@ -125,16 +124,18 @@ class Service:
         return 'dd-{}-output-{}'.format(self.queue_kind, kind)
 
     def send_progress_update(self, id_: str, updates):
-        progress, page_urls = updates
-        progress_topic = self.output_topic('progress')
-        logging.info('Sending update for "{}" to {}: {}'
-                     .format(id_, progress_topic, progress))
-        self.send(progress_topic, {'id': id_, 'progress': progress})
-        if page_urls:
+        progress, page_sample = updates
+        if progress is not None:
+            progress_topic = self.output_topic('progress')
+            logging.info('Sending update for "{}" to {}: {}'
+                         .format(id_, progress_topic, progress))
+            self.send(progress_topic, {'id': id_, 'progress': progress})
+        if page_sample:
             pages_topic = self.output_topic('pages')
             logging.info('Sending {} sample urls for "{}" to {}'
-                         .format(len(page_urls), id_, pages_topic))
-            self.send(pages_topic, {'id': id_, 'page_sample': page_urls})
+                         .format(len(page_sample), id_, pages_topic))
+            print(page_sample)
+            self.send(pages_topic, {'id': id_, 'page_sample': page_sample})
 
     def send_model_update(self, id_: str, new_model_data: bytes):
         encoded_model = encode_model_data(new_model_data)

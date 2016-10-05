@@ -39,7 +39,8 @@ class CrawlProcess:
         self.seeds = seeds
         self.docker_image = docker_image or self.default_docker_image
         self.last_progress = None  # last update sent in self.get_updates
-        self.last_progress_time = None
+        self.last_page = None  # last page sample sent in self.get_updates
+        self.last_page_time = None
 
     @classmethod
     def load_all_running(cls, **kwargs) -> Dict[str, 'CrawlProcess']:
@@ -68,27 +69,33 @@ class CrawlProcess:
     def stop(self):
         raise NotImplementedError
 
-    def get_updates(self) -> Optional[Tuple[str, List[str]]]:
+    def get_updates(self) -> Tuple[Optional[str], Optional[List[Dict]]]:
         """ Return a tuple of progress update, and a list (possibly empty)
         of sample crawled urls.
         If nothing changed from the last time, return None.
         """
-        updates = self._get_updates()
-        if updates is not None:
-            progress, pages = updates
-            if progress != self.last_progress:
-                self.last_progress = progress
-                self.last_progress_time = time.time()
-                return progress, pages
+        progress, pages = self._get_updates()
+        if progress == self.last_progress:
+            progress = None
+        else:
+            self.last_progress = progress
+        if pages:
+            page = pages[-1]
+            if self.last_page == page:
+                pages = []
+            else:
+                self.last_page = page
+                self.last_page_time = time.time()
+        return progress, pages
 
-    def _get_updates(self) -> Tuple[str, List[str]]:
+    def _get_updates(self) -> Tuple[str, List[Dict]]:
         raise NotImplementedError
 
     def get_n_last(self):
         """ Return desired number of last items in order to maintain
         self.target_sample_rate_pm
         """
-        if self.last_progress_time is None:
+        if self.last_page_time is None:
             return 1
-        delay_m = (time.time() - self.last_progress_time) / 60
+        delay_m = (time.time() - self.last_page_time) / 60
         return math.ceil(self.target_sample_rate_pm * delay_m)
