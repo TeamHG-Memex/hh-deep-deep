@@ -57,15 +57,17 @@ class DDCrawlerProcess(CrawlProcess):
             ))
         redis_config = cur_dir.joinpath('redis.conf').read_text()
         self.paths.redis_conf.write_text(redis_config)
+        logging.info('Starting crawl in {}'.format(self.paths.root))
         self._compose_cmd('up', '-d')
         n_processes = multiprocessing.cpu_count()
         self._compose_cmd('scale', 'crawler={}'.format(n_processes))
+        logging.info('Crawl "{}" started'.format(self.id_))
         self.pid = self.id_
 
     def stop(self):
         if self.pid:
             self._compose_cmd('down', '-v')
-            logging.info('Crawl {} stopped'.format(self.pid))
+            logging.info('Crawl "{}" stopped'.format(self.pid))
             self.pid = None
         else:
             logging.info('Can not stop crawl: it is not running')
