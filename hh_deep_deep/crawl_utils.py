@@ -3,6 +3,7 @@ import json
 import gzip
 import hashlib
 from pathlib import Path
+import math
 import time
 from typing import Dict, Optional, List, Tuple
 
@@ -47,7 +48,7 @@ def get_last_valid_items(gzip_path: str, n_last: int) -> List[Dict]:
 class CrawlProcess:
     jobs_root = None
     default_docker_image = None
-    paths_cls = CrawlPaths
+    target_sample_rate_pm = 3  # per minute
 
     def __init__(self, *,
                  id_: str,
@@ -103,3 +104,12 @@ class CrawlProcess:
 
     def _get_updates(self) -> Tuple[str, List[str]]:
         raise NotImplementedError
+
+    def get_n_last(self):
+        """ Return desired number of last items in order to maintain
+        self.target_sample_rate_pm
+        """
+        if self.last_progress_time is None:
+            return 1
+        delay_m = (time.time() - self.last_progress_time) / 60
+        return math.ceil(self.target_sample_rate_pm * delay_m)

@@ -3,9 +3,7 @@ import json
 import logging
 from pathlib import Path
 import re
-import math
 import subprocess
-import time
 from typing import Dict, List, Optional, Tuple
 
 from .crawl_utils import (
@@ -31,7 +29,6 @@ class DeepDeepProcess(CrawlProcess):
         self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.last_model_file = None  # last model sent in self.get_new_model
-        self.target_sample_rate_pm = 3  # per minute
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DeepDeepProcess']:
@@ -112,15 +109,6 @@ class DeepDeepProcess(CrawlProcess):
             return progress, pages
         else:
             return 'Crawl started, no updates yet', []
-
-    def get_n_last(self):
-        """ Return desired number of last items to maintain
-        self.target_sample_rate_pm
-        """
-        if self.last_progress_time is None:
-            return 1
-        delay_m = (time.time() - self.last_progress_time) / 60
-        return math.ceil(self.target_sample_rate_pm * delay_m)
 
     def get_new_model(self) -> Optional[bytes]:
         """ Return a data of the new model (if there is any), or None.
