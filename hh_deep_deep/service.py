@@ -2,7 +2,6 @@ import argparse
 import base64
 import logging
 import json
-from pprint import pformat
 from typing import Dict, Optional
 import zlib
 
@@ -82,13 +81,8 @@ class Service:
                                           else type(value)))
             if counter % self.check_updates_every == 0:
                 self.send_updates()
+            self.producer.flush()
             self.consumer.commit()
-
-    def send_result(self, topic: str, result: Dict) -> None:
-        logging.info('Sending result for id "{}" to {}'
-                     .format(result.get('id'), topic))
-        self.producer.send(topic, result)
-        self.producer.flush()
 
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:

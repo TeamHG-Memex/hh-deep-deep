@@ -3,11 +3,13 @@ import json
 import logging
 from pathlib import Path
 import re
+import math
 import subprocess
-from typing import List, Optional, Tuple
+import time
+from typing import Dict, List, Optional, Tuple
 
 from .crawl_utils import (
-    CrawlPaths, get_last_valid_item, CrawlProcess, gen_job_path)
+    CrawlPaths, get_last_valid_items, CrawlProcess, gen_job_path)
 
 
 class DeepDeepPaths(CrawlPaths):
@@ -29,6 +31,7 @@ class DeepDeepProcess(CrawlProcess):
         self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.last_model_file = None  # last model sent in self.get_new_model
+        self.target_sample_rate_pm = 3  # per minute
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DeepDeepProcess']:
@@ -100,11 +103,24 @@ class DeepDeepProcess(CrawlProcess):
     def _get_updates(self) -> Tuple[str, List[str]]:
         if not self.paths.items.exists():
             return 'Craw is not running yet', []
-        last_item = get_last_valid_item(str(self.paths.items))
-        if last_item is not None:
-            return get_updates_from_item(last_item)
+        n_last = self.get_n_last()
+        last_items = get_last_valid_items(str(self.paths.items), n_last)
+        if last_items:
+            progress = get_progress_from_item(last_items[-1])
+            pages = [get_sample_from_item(item) for item in last_items
+                     if 'url' in item]
+            return progress, pages
         else:
             return 'Crawl started, no updates yet', []
+
+    def get_n_last(self):
+        """ Return desired number of last items to maintain
+        self.target_sample_rate_pm
+        """
+        if self.last_progress_time is None:
+            return 1
+        delay_m = (time.time() - self.last_progress_time) / 60
+        return math.ceil(self.target_sample_rate_pm * delay_m)
 
     def get_new_model(self) -> Optional[bytes]:
         """ Return a data of the new model (if there is any), or None.
@@ -120,16 +136,15 @@ class DeepDeepProcess(CrawlProcess):
                 return model_file.read_bytes()
 
 
-def get_updates_from_item(item):
-    url = item.pop('url', None)
-    if url:
-        page_item = {'url': url}
-        reward = item.pop('reward', None)  # type: Optional[float]
-        if reward is not None:
-            page_item['score'] = 100 * reward
-        pages = [page_item]
-    else:
-        pages = []
+def get_sample_from_item(item: Dict) -> Dict:
+    page_item = {'url': item['url']}
+    reward = item.get('reward')
+    if reward is not None:
+        page_item['score'] = 100 * reward
+    return page_item
+
+
+def get_progress_from_item(item):
     progress = (
         '{pages:,} pages processed from {crawled_domains:,} domains '
         '({relevant_domains:,} relevant), '
@@ -144,4 +159,4 @@ def get_updates_from_item(item):
             domains_open=item.get('domains_open', 0),
         )
     )
-    return progress, pages
+    return progress

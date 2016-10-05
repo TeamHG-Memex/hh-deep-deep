@@ -1,3 +1,4 @@
+from collections import deque
 import json
 import gzip
 import hashlib
@@ -25,22 +26,22 @@ class CrawlPaths:
         self.root.mkdir(parents=True, exist_ok=True)
 
 
-def get_last_valid_item(gzip_path: str) -> Optional[Dict]:
+def get_last_valid_items(gzip_path: str, n_last: int) -> List[Dict]:
     # TODO - make it more efficient, skip to the end of the file
+    buffer = deque(maxlen=n_last + 1)
     with gzip.open(gzip_path, 'rt') as f:
-        prev_line = cur_line = None
         try:
             for line in f:
-                prev_line = cur_line
-                cur_line = line
+                buffer.append(line)
         except Exception:
             pass
-        for line in [cur_line, prev_line]:
-            if line is not None:
-                try:
-                    return json.loads(line)
-                except Exception:
-                    pass
+    results = []
+    for line in reversed(buffer):
+        try:
+            results.append(json.loads(line))
+        except Exception:
+            pass
+    return results[:n_last]
 
 
 class CrawlProcess:
@@ -57,7 +58,8 @@ class CrawlProcess:
         self.id_ = id_
         self.seeds = seeds
         self.docker_image = docker_image or self.default_docker_image
-        self.last_updates = None  # last update sent in self.get_updates
+        self.last_progress = None  # last update sent in self.get_updates
+        self.last_progress_time = None
 
     @classmethod
     def load_all_running(cls, **kwargs) -> Dict[str, 'CrawlProcess']:
@@ -92,9 +94,12 @@ class CrawlProcess:
         If nothing changed from the last time, return None.
         """
         updates = self._get_updates()
-        if updates != self.last_updates:
-            self.last_updates = updates
-            return updates
+        if updates is not None:
+            progress, pages = updates
+            if progress != self.last_progress:
+                self.last_progress = progress
+                self.last_progress_time = time.time()
+                return progress, pages
 
     def _get_updates(self) -> Tuple[str, List[str]]:
         raise NotImplementedError
