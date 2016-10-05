@@ -43,6 +43,7 @@ class DDCrawlerProcess(CrawlProcess):
     def stop(self):
         if self.pid:
             self._compose_cmd('down', '-v')
+            logging.info('Crawl {} stopped'.format(self.pid))
             self.pid = None
         else:
             logging.info('Can not stop crawl: it is not running')
