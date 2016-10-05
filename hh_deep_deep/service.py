@@ -67,7 +67,8 @@ class Service:
                 if value == {'from-tests': 'stop'}:
                     logging.info('Got message to stop (from tests)')
                     return
-                elif all(key in value for key in self.required_keys):
+                elif all(value.get(key) is not None
+                         for key in self.required_keys):
                     logging.info('Got start crawl message with id "{}"'
                                  .format(value['id']))
                     self.start_crawl(value)
