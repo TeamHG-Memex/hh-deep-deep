@@ -92,16 +92,20 @@ class DDCrawlerProcess(CrawlProcess):
     def _get_updates(self) -> Tuple[str, List[str]]:
         n_last = self.get_n_last()
         csv_paths = list(self.paths.out.glob('*.csv'))
-        n_last_per_file = math.ceil(n_last / len(csv_paths))
-        last_lines = []
-        for csv_path in csv_paths:
-            for ts, url, _, _, score in get_last_csv_lines(
-                    csv_path, n_last_per_file):
-                last_lines.append((float(ts), url, float(score)))
-        last_lines.sort(key=lambda x: x[0])
-        last_lines = last_lines[-n_last:]
-        return 'TODO', [{'url': url, 'score': 100 * score}
+        if csv_paths:
+            n_last_per_file = math.ceil(n_last / len(csv_paths))
+            last_lines = []
+            for csv_path in csv_paths:
+                for ts, url, _, _, score in get_last_csv_lines(
+                        csv_path, n_last_per_file):
+                    last_lines.append((float(ts), url, float(score)))
+            last_lines.sort(key=lambda x: x[0])
+            last_lines = last_lines[-n_last:]
+            pages = [{'url': url, 'score': 100 * score}
                         for _, url, score in last_lines]
+        else:
+            pages = []
+        return 'TODO', pages
 
     def _compose_cmd(self, *args):
         subprocess.check_call(
