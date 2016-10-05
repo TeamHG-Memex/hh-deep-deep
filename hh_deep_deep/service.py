@@ -14,6 +14,8 @@ from .utils import configure_logging, log_ignore_exception
 
 
 class Service:
+    max_message_size = 104857600
+
     def __init__(self, queue_kind: str,
                  kafka_host: str=None, docker_image: str=None):
         self.queue_kind = queue_kind
@@ -29,9 +31,11 @@ class Service:
         self.consumer = KafkaConsumer(
             'dd-{}-input'.format(self.queue_kind),
             consumer_timeout_ms=200,
+            max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
         self.producer = KafkaProducer(
             value_serializer=encode_message,
+            max_request_size=self.max_message_size,
             **kafka_kwargs)
         self.cp_kwargs = {'docker_image': docker_image}
         self.running = self.process_class.load_all_running(**self.cp_kwargs)
