@@ -128,21 +128,22 @@ class Service:
         progress_topic = self.output_topic('progress')
         logging.info('Sending update for "{}" to {}: {}'
                      .format(id_, progress_topic, progress))
-        self.producer.send(
-            progress_topic, {'id': id_, 'progress': progress})
+        self.send(progress_topic, {'id': id_, 'progress': progress})
         if page_urls:
             pages_topic = self.output_topic('pages')
             logging.info('Sending {} sample urls for "{}" to {}'
                          .format(len(page_urls), id_, pages_topic))
-            self.producer.send(
-                pages_topic, {'id': id_, 'page_sample': page_urls})
+            self.send(pages_topic, {'id': id_, 'page_sample': page_urls})
 
     def send_model_update(self, id_: str, new_model_data: bytes):
         encoded_model = encode_model_data(new_model_data)
         topic = self.output_topic('model')
         logging.info('Sending new model to {}, model size {:,} bytes'
                      .format(topic, len(encoded_model)))
-        self.producer.send(topic, {'id': id_, 'link_model': encoded_model})
+        self.send(topic, {'id': id_, 'link_model': encoded_model})
+
+    def send(self, topic: str, message: Dict):
+        self.producer.send(topic, message).get()
 
 
 def encode_message(message: Dict) -> bytes:
