@@ -28,8 +28,7 @@ def main():
     producer = KafkaProducer(
         max_request_size=104857600, **kafka_kwargs)
 
-    producer.send(args.topic, data)
-    producer.flush()
+    producer.send(args.topic, data).get()
     print('Pushed {} bytes to {}'.format(len(data), args.topic))
 
 
