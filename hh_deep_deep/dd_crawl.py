@@ -11,9 +11,7 @@ class DDCrawlerProcess(CrawlProcess):
     jobs_root = Path('dd-jobs')
     default_docker_image = 'dd-crawler'
 
-    def __init__(self, *,
-                 page_clf_data: bytes,
-                 link_clf_data: bytes,
+    def __init__(self, *, page_clf_data: bytes, link_clf_data: bytes,
                  **kwargs):
         super().__init__(**kwargs)
         self.page_clf_data = page_clf_data
@@ -37,21 +35,21 @@ class DDCrawlerProcess(CrawlProcess):
             .read_text())
         self.paths.root.joinpath('docker-compose.yml').write_text(
             compose_templates.format(docker_image=self.docker_image))
-        self.compose_cmd('up', '-d')
+        self._compose_cmd('up', '-d')
         n_processes = multiprocessing.cpu_count()
-        self.compose_cmd('scale', 'scale', 'crawler={}'.format(n_processes))
+        self._compose_cmd('scale', 'scale', 'crawler={}'.format(n_processes))
         self.pid = self.id_
-
-    def compose_cmd(self, *args):
-        subprocess.check_call(
-            ['docker-compose'] + args, cwd=str(self.paths.root))
 
     def stop(self):
         if self.pid:
-            self.compose_cmd('down', '-v')
+            self._compose_cmd('down', '-v')
             self.pid = None
         else:
             logging.info('Can not stop crawl: it is not running')
 
     def _get_updates(self) -> Tuple[str, List[str]]:
         return 'TODO', []
+
+    def _compose_cmd(self, *args):
+        subprocess.check_call(
+            ['docker-compose'] + args, cwd=str(self.paths.root))

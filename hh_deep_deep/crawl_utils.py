@@ -48,7 +48,7 @@ def get_last_valid_item(gzip_path: str) -> Optional[Dict]:
 
 class CrawlProcess:
     jobs_root = None
-    defaul_docker_image = None
+    default_docker_image = None
 
     def __init__(self, *,
                  id_: str,
@@ -61,7 +61,7 @@ class CrawlProcess:
         self.seeds = seeds
         root = root or gen_job_path(id_, self.jobs_root)
         self.paths = CrawlPaths(root)
-        self.docker_image = docker_image or self.defaul_docker_image
+        self.docker_image = docker_image or self.default_docker_image
         self.last_updates = None  # last update sent in self.get_updates
 
     @classmethod
