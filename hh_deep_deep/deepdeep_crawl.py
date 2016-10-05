@@ -89,15 +89,13 @@ class DeepDeepProcess(CrawlProcess):
         self.paths.pid.write_text(self.pid)
 
     def stop(self):
-        if self.pid:
-            subprocess.check_output(['docker', 'stop', self.pid])
-            logging.info('Crawl stopped, removing container')
-            subprocess.check_output(['docker', 'rm', self.pid])
-            self.paths.pid.unlink()
-            logging.info('Removed container id {}'.format(self.pid))
-            self.pid = None
-        else:
-            logging.info('Can not stop crawl: it is not running')
+        assert self.pid is not None
+        subprocess.check_output(['docker', 'stop', self.pid])
+        logging.info('Crawl stopped, removing container')
+        subprocess.check_output(['docker', 'rm', self.pid])
+        self.paths.pid.unlink()
+        logging.info('Removed container id {}'.format(self.pid))
+        self.pid = None
 
     def _get_updates(self) -> Tuple[str, List[str]]:
         if not self.paths.items.exists():

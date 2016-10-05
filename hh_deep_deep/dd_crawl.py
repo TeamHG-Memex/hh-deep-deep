@@ -65,12 +65,10 @@ class DDCrawlerProcess(CrawlProcess):
         self.pid = self.id_
 
     def stop(self):
-        if self.pid:
-            self._compose_cmd('down', '-v')
-            logging.info('Crawl "{}" stopped'.format(self.pid))
-            self.pid = None
-        else:
-            logging.info('Can not stop crawl: it is not running')
+        assert self.pid is not None
+        self._compose_cmd('down', '-v')
+        logging.info('Crawl "{}" stopped'.format(self.pid))
+        self.pid = None
 
     def _get_updates(self) -> Tuple[str, List[str]]:
         return 'TODO', []
