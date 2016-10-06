@@ -49,13 +49,68 @@ Outgoing: send progress update, ``dd-trainer-output-progress``::
       "progress": "Crawled N pages and M domains, average reward is 0.122"
     }
 
-Usage
------
+
+Running with docker
+-------------------
+
+Install docker and docker-compose (assuming Ubuntu 16.04)::
+
+    sudo apt install -y docker.io python-pip
+    sudo -H pip install docker-compose
+
+Add yourself to docker group (requires re-login)::
+
+    sudo usermod -aG docker <username>
+
+See example ``docker-compose.yml``: you might tweak names of images used
+(hh-page-clf, hh-deep-deep, deep-deep, dd-crawler).
+
+You must specify the IP at which kafka is running with ``KAFKA_HOST``
+environment variable
+(kafka **must** advertise itself as ``hh-kafka`` - if you want a different name,
+change ``docker-compose.yml``).
+
+Start with::
+
+    KAFKA_HOST=host-where-kafka-is-running docker-compose up -d
+
+This does not work with a local kafka for some reason.
+
+
+Usage without Docker
+--------------------
 
 Run the service passing THH host (add hh-kafka to ``/etc/hosts``
 if running on a different network)::
 
-    hh-deep-deep-service --kafka-host hh-kafka
+    hh-deep-deep-service [trainer|crawler] \
+        --kafka-host hh-kafka
+        --docker-image the-image
+
+
+Running local kafka
+-------------------
+
+Start local kafka with::
+
+    docker run -d --name kafka \
+        -p 2181:2181 -p 9092:9092 \
+        --env ADVERTISED_HOST=127.0.0.1 \
+        --env ADVERTISED_PORT=9092 \
+        spotify/kafka
+
+By default, kafka limits message size to 1Mb, which is too small in our case.
+In order to raise the limit, do the following in the kafka container::
+
+    docker exec -it kafka /bin/bash
+    cd /opt/kafka_2.11-0.8.2.1/config
+    echo "message.max.bytes=104857600" >> server.properties
+    echo "replica.fetch.max.bytes=104857600" >> server.properties
+    echo "fetch.message.max.bytes=104857600" >> server.properties
+    echo "fetch.message.max.bytes=104857600" >> consumer.properties
+    exit
+    docker stop kafka
+    docker start kafka
 
 
 Testing
@@ -63,12 +118,7 @@ Testing
 
 Install ``pytest`` and ``pytest-cov``.
 
-Start kafka with zookeper::
-
-    docker run --rm -p 2181:2181 -p 9092:9092 \
-        --env ADVERTISED_HOST=127.0.0.1 \
-        --env ADVERTISED_PORT=9092 \
-        spotify/kafka
+Start kafka (see above).
 
 Run tests::
 

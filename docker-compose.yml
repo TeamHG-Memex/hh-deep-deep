@@ -1,0 +1,38 @@
+version: '2'
+
+
+services:
+
+  hh-trainer:
+    image: hh-deep-deep
+    extra_hosts:
+      - "hh-kafka:${KAFKA_HOST}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./deep-deep-jobs:/opt/hh-deep-deep/deep-deep-jobs
+    command:
+      - hh-deep-deep-service
+      - trainer
+      - --kafka-host=hh-kafka
+      - --docker-image=deep-deep
+
+  hh-crawler:
+    image: hh-deep-deep
+    extra_hosts:
+      - "hh-kafka:${KAFKA_HOST}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./dd-jobs:/opt/hh-deep-deep/dd-jobs
+    command:
+      - hh-deep-deep-service
+      - crawler
+      - --kafka-host=hh-kafka
+      - --docker-image=dd-crawler
+
+  hh-modeler:
+    image: hh-page-clf
+    extra_hosts:
+      - "hh-kafka:${KAFKA_HOST}"
+    command:
+      - hh-page-clf-service
+      - --kafka-host=hh-kafka
