@@ -78,7 +78,36 @@ Start trainer, modeler and crawler services with::
     docker-compose up -d
 
 If you want to use a local kafka, just add ``127.0.0.1   hh-kafka`` to ``/etc/hosts``,
-and star kafka as described below.
+and star kafka with::
+
+    docker run -it --rm --name kafka \
+        --add-host hh-kafka:127.0.0.1 \
+        -p 2181:2181 -p 9092:9092 \
+        --env ADVERTISED_HOST=hh-kafka \
+        --env ADVERTISED_PORT=9092 \
+        spotify/kafka
+
+By default, kafka limits message size to 1Mb, which is too small in our case.
+In order to raise the limit, do the following in the kafka container::
+
+    docker exec -it kafka /bin/bash
+    cd /opt/kafka_2.11-0.8.2.1/config
+    echo "message.max.bytes=104857600" >> server.properties
+    echo "replica.fetch.max.bytes=104857600" >> server.properties
+    echo "fetch.message.max.bytes=104857600" >> server.properties
+    echo "fetch.message.max.bytes=104857600" >> consumer.properties
+    kill -15 `ps aux | grep kafka.Kafka | grep -v grep | awk '{print $2}'`
+    exit
+
+For some reason, pushing messages does not work after stop/start.
+
+Usage without Docker
+--------------------
+
+Run the service passing kafka host as ``--kafka-host``
+(or leave it blank if testing locally)::
+
+    hh-deep-deep-service [trainer|crawler] --kafka-host hh-kafka
 
 
 Running local kafka
@@ -92,29 +121,8 @@ Start local kafka with::
         --env ADVERTISED_PORT=9092 \
         spotify/kafka
 
-By default, kafka limits message size to 1Mb, which is too small in our case.
-In order to raise the limit, do the following in the kafka container::
-
-    docker exec -it kafka /bin/bash
-    cd /opt/kafka_2.11-0.8.2.1/config
-    echo "message.max.bytes=104857600" >> server.properties
-    echo "replica.fetch.max.bytes=104857600" >> server.properties
-    echo "fetch.message.max.bytes=104857600" >> server.properties
-    echo "fetch.message.max.bytes=104857600" >> consumer.properties
-    exit
-    docker stop kafka
-    docker start kafka
-
-
-Usage without Docker
---------------------
-
-Run the service passing kafka host as ``--kafka-host``
-(or leave it blank if testing locally)::
-
-    hh-deep-deep-service [trainer|crawler] \
-        --kafka-host hh-kafka
-        --docker-image the-image
+Also tweak it's config in the same way as described above, at the end of
+"Running with docker" section.
 
 
 Testing
