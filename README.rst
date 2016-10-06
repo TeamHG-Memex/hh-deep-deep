@@ -62,9 +62,6 @@ Add yourself to docker group (requires re-login)::
 
     sudo usermod -aG docker <username>
 
-See example ``docker-compose.yml``: you might tweak names of images used
-(hh-page-clf, hh-deep-deep, deep-deep, dd-crawler).
-
 You **must** add the IP at which kafka is running to ``/etc/hosts``, making it
 resolve to ``hh-kafka``. An alternative would be to add::
 
