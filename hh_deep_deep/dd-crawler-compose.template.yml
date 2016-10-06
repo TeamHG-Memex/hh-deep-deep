@@ -11,16 +11,16 @@ services:
     image: redis:3.0
     volumes:
       - redis-data:/data
-      - ./{redis_conf}:/usr/local/etc/redis/redis.conf
+      - {redis_conf}:/usr/local/etc/redis/redis.conf
     command: [redis-server, /usr/local/etc/redis/redis.conf]
 
   crawler:
     image: {docker_image}
     volumes:
-      - ./{seeds}:/dd_crawler/seeds.txt
-      - ./{link_clf}:/dd_crawler/Q.joblib
-      - ./{page_clf}:/dd_crawler/page_clf.joblib
-      - ./{out}:/out
+      - {seeds}:/dd_crawler/seeds.txt
+      - {link_clf}:/dd_crawler/Q.joblib
+      - {page_clf}:/dd_crawler/page_clf.joblib
+      - {out}:/out
     entrypoint:
       - /dd_crawler/docker/crawl.sh
       - deepdeep

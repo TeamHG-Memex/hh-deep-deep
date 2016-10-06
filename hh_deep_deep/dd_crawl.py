@@ -68,11 +68,8 @@ class DDCrawlerProcess(CrawlProcess):
         self.paths.root.joinpath('docker-compose.yml').write_text(
             compose_templates.format(
                 docker_image=self.docker_image,
-                seeds=self.paths.seeds.name,
-                page_clf=self.paths.page_clf.name,
-                link_clf=self.paths.link_clf.name,
-                redis_conf=self.paths.redis_conf.name,
-                out=self.paths.out.name,
+                **{p: self.to_host_path(getattr(self.paths, p)) for p in [
+                    'seeds', 'page_clf', 'link_clf', 'redis_conf', 'out']}
             ))
         redis_config = cur_dir.joinpath('redis.conf').read_text()
         self.paths.redis_conf.write_text(redis_config)
