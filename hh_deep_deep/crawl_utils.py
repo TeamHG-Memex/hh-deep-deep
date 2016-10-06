@@ -33,11 +33,13 @@ class CrawlProcess:
                  id_: str,
                  seeds: List[str],
                  docker_image: str=None,
+                 host_root: str=None,
                  pid: str=None):
         self.pid = pid
         self.id_ = id_
         self.seeds = seeds
         self.docker_image = docker_image or self.default_docker_image
+        self.host_root = Path(host_root) if host_root is not None else None
         self.last_progress = None  # last update sent in self.get_updates
         self.last_page = None  # last page sample sent in self.get_updates
         self.last_page_time = None
@@ -99,3 +101,14 @@ class CrawlProcess:
             return 1
         delay_m = (time.time() - self.last_page_time) / 60
         return math.ceil(self.target_sample_rate_pm * delay_m)
+
+    def to_host_path(self, path: Path) -> Path:
+        """ Convert path to a host path, which must lie under ".".
+        The reason for this is that we might be in a docker container,
+        but the commands we issue to docker are interpreted on the host,
+        so the paths must also be host paths.
+        """
+        if self.host_root is None:
+            return path
+        rel_path = path.absolute().relative_to(Path('.').absolute())
+        return self.host_root.joinpath(rel_path)

@@ -15,8 +15,7 @@ from .utils import configure_logging, log_ignore_exception
 class Service:
     max_message_size = 104857600
 
-    def __init__(self, queue_kind: str,
-                 kafka_host: str=None, docker_image: str=None):
+    def __init__(self, queue_kind: str, kafka_host: str=None, **kwargs):
         self.queue_kind = queue_kind
         self.required_keys = ['id', 'seeds'] + {
             'trainer': ['page_model'],
@@ -40,7 +39,7 @@ class Service:
             value_serializer=encode_message,
             max_request_size=self.max_message_size,
             **kafka_kwargs)
-        self.cp_kwargs = {'docker_image': docker_image}
+        self.cp_kwargs = kwargs
         self.running = self.process_class.load_all_running(**self.cp_kwargs)
         if self.running:
             for id_, process in sorted(self.running.items()):
@@ -177,10 +176,12 @@ def main():
     arg('kind', choices=['trainer', 'crawler'])
     arg('--docker-image', help='Name of docker image for the crawler')
     arg('--kafka-host')
+    arg('--host-root', help='Pass host ${PWD} if running in a docker container')
     args = parser.parse_args()
 
     configure_logging()
     service = Service(
-        args.kind, kafka_host=args.kafka_host, docker_image=args.docker_image)
+        args.kind, kafka_host=args.kafka_host, docker_image=args.docker_image,
+        host_root=args.host_root)
     logging.info('Starting hh dd-{} service'.format(args.kind))
     service.run()
