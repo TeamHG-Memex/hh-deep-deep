@@ -5,6 +5,7 @@ services:
 
   hh-trainer:
     image: docker.hyperiongray.com/hh-deep-deep:0.0.1
+    restart: always
     network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -18,6 +19,7 @@ services:
 
   hh-crawler:
     image: docker.hyperiongray.com/hh-deep-deep:0.0.1
+    restart: always
     network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -31,6 +33,7 @@ services:
 
   hh-modeler:
     image: docker.hyperiongray.com/hh-page-clf:0.0.8
+    restart: always
     network_mode: host
     command:
       - hh-page-clf-service
