@@ -21,7 +21,7 @@ def main():
         with open(args.filename, 'rb') as f:
             data = f.read()
 
-    logging.basicConfig(level=logging.ERROR)
+    logging.basicConfig(level=logging.INFO)
     kafka_kwargs = {}
     if args.kafka_host:
         kafka_kwargs['bootstrap_servers'] = args.kafka_host

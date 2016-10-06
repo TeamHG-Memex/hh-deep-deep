@@ -69,12 +69,8 @@ class Service:
                     return
                 elif all(value.get(key) is not None
                          for key in self.required_keys):
-                    logging.info('Got start crawl message with id "{}"'
-                                 .format(value['id']))
                     self.start_crawl(value)
                 elif 'id' in value and value.get('stop'):
-                    logging.info('Got stop crawl message with id "{}"'
-                                 .format(value['id']))
                     self.stop_crawl(value)
                 else:
                     logging.error('Dropping a message in unknown format: {}'
@@ -88,6 +84,15 @@ class Service:
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
         id_ = request['id']
+        logging.info(
+            'Got start crawl message with id "{id}", {seeds} seeds, '
+            'page model size {page_model:,} bytes{rest}.'.format(
+                id=id_,
+                seeds=len(request['seeds']),
+                page_model=len(request['page_model']),
+                rest=', link model size {:,}'.format(len(request['link_model']))
+                     if request.get('link_model') else '',
+            ))
         current_process = self.running.pop(id_, None)
         if current_process is not None:
             current_process.stop()
@@ -103,6 +108,7 @@ class Service:
     @log_ignore_exception
     def stop_crawl(self, request: Dict) -> None:
         id_ = request['id']
+        logging.info('Got stop crawl message with id "{}"'.format(id_))
         process = self.running.get(id_)
         if process is not None:
             process.stop()

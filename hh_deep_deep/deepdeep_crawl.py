@@ -121,6 +121,7 @@ class DeepDeepProcess(CrawlProcess):
         if model_files:
             model_file = model_files[-1]
             if model_file != self.last_model_file:
+                logging.info('Sending new model from {}'.format(model_file))
                 self.last_model_file = model_file
                 return model_file.read_bytes()
 
