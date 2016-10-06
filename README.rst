@@ -65,27 +65,20 @@ Add yourself to docker group (requires re-login)::
 See example ``docker-compose.yml``: you might tweak names of images used
 (hh-page-clf, hh-deep-deep, deep-deep, dd-crawler).
 
-You must specify the IP at which kafka is running with ``KAFKA_HOST``
-environment variable
-(kafka **must** advertise itself as ``hh-kafka`` - if you want a different name,
-change ``docker-compose.yml``).
+You **must** add the IP at which kafka is running to ``/etc/hosts``, making it
+resolve to ``hh-kafka``. An alternative would be to add::
 
-Start with::
+    extra_hosts:
+        - "hh-kafka:${KAFKA_HOST}"
 
-    KAFKA_HOST=host-where-kafka-is-running docker-compose up -d
+instead of ``network_mode: host``, but that will not work with local kafka.
 
-This does not work with a local kafka for some reason.
+Start trainer, modeler and crawler services with::
 
+    docker-compose up -d
 
-Usage without Docker
---------------------
-
-Run the service passing THH host (add hh-kafka to ``/etc/hosts``
-if running on a different network)::
-
-    hh-deep-deep-service [trainer|crawler] \
-        --kafka-host hh-kafka
-        --docker-image the-image
+If you want to use a local kafka, just add ``127.0.0.1   hh-kafka`` to ``/etc/hosts``,
+and star kafka as described below.
 
 
 Running local kafka
@@ -111,6 +104,17 @@ In order to raise the limit, do the following in the kafka container::
     exit
     docker stop kafka
     docker start kafka
+
+
+Usage without Docker
+--------------------
+
+Run the service passing kafka host as ``--kafka-host``
+(or leave it blank if testing locally)::
+
+    hh-deep-deep-service [trainer|crawler] \
+        --kafka-host hh-kafka
+        --docker-image the-image
 
 
 Testing

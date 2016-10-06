@@ -5,8 +5,7 @@ services:
 
   hh-trainer:
     image: hh-deep-deep
-    extra_hosts:
-      - "hh-kafka:${KAFKA_HOST}"
+    network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./deep-deep-jobs:/opt/hh-deep-deep/deep-deep-jobs
@@ -18,8 +17,7 @@ services:
 
   hh-crawler:
     image: hh-deep-deep
-    extra_hosts:
-      - "hh-kafka:${KAFKA_HOST}"
+    network_mode: host
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./dd-jobs:/opt/hh-deep-deep/dd-jobs
@@ -31,8 +29,7 @@ services:
 
   hh-modeler:
     image: hh-page-clf
-    extra_hosts:
-      - "hh-kafka:${KAFKA_HOST}"
+    network_mode: host
     command:
       - hh-page-clf-service
       - --kafka-host=hh-kafka
