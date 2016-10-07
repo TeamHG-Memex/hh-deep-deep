@@ -29,7 +29,7 @@ class Service:
         if kafka_host is not None:
             kafka_kwargs['bootstrap_servers'] = kafka_host
         # Together with consumer_timeout_ms, this defines responsiveness.
-        self.check_updates_every = 50
+        self.check_updates_every = 30
         self.consumer = KafkaConsumer(
             'dd-{}-input'.format(self.queue_kind),
             consumer_timeout_ms=200,

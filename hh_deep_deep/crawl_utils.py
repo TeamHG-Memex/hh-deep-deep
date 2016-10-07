@@ -1,3 +1,4 @@
+from collections import deque
 import hashlib
 from pathlib import Path
 import math
@@ -112,3 +113,10 @@ class CrawlProcess:
             return path
         rel_path = path.absolute().relative_to(Path('.').absolute())
         return self.host_root.joinpath(rel_path)
+
+
+def get_last_lines(path: Path, n_last: int) -> List[str]:
+    # This is only valid if there are no newlines in items
+    # TODO - more efficient, skip to the end of file
+    with path.open('rt') as f:
+        return list(deque(f, maxlen=n_last))

@@ -1,4 +1,3 @@
-from collections import deque
 import csv
 import logging
 from pathlib import Path
@@ -7,7 +6,7 @@ import multiprocessing
 import subprocess
 from typing import Optional, Tuple, List, Dict
 
-from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path
+from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path, get_last_lines
 
 
 class DDCrawlerPaths(CrawlPaths):
@@ -110,8 +109,6 @@ class DDCrawlerProcess(CrawlProcess):
 
 
 def get_last_csv_items(csv_path: Path, n_last: int, exp_len: int) -> List[Dict]:
-    # This is only valid if there are no newlines in items
-    # TODO - more efficient, skip to the end of file
-    last_lines = deque(csv_path.open('rt'), maxlen=n_last + 1)
+    last_lines = get_last_lines(csv_path, n_last + 1)
     last_items = [it for it in csv.reader(last_lines) if len(it) == exp_len]
     return last_items[-n_last:]

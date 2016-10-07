@@ -1,20 +1,19 @@
 from collections import deque
 import csv
 import json
-import gzip
 import logging
 from pathlib import Path
 import re
 import subprocess
 from typing import Dict, List, Optional, Tuple
 
-from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path
+from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path, get_last_lines
 
 
 class DeepDeepPaths(CrawlPaths):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.items = self.root.joinpath('items.jl.gz')
+        self.items = self.root.joinpath('items.jl')
         self.pid = self.root.joinpath('pid.txt')
 
 
@@ -78,7 +77,7 @@ class DeepDeepProcess(CrawlProcess):
             '-a', 'seeds_url=/job/{}'.format(self.paths.seeds.name),
             '-a', 'checkpoint_path=/job',
             '-a', 'classifier_path=/job/{}'.format(self.paths.page_clf.name),
-            '-o', 'gzip:/job/items.jl',
+            '-o', '/job/items.jl',
             '-a', 'export_cdr=0',
             '--logfile', '/job/spider.log',
             '-L', 'INFO',
@@ -152,15 +151,8 @@ def get_progress_from_item(item):
     return progress
 
 
-def get_last_valid_jl_items(gzip_path: Path, n_last: int) -> List[Dict]:
-    # TODO - make it more efficient, skip to the end of the file
-    last_lines = deque(maxlen=n_last + 1)
-    with gzip.open(str(gzip_path), 'rt') as f:
-        try:
-            for line in f:
-                last_lines.append(line)
-        except Exception:
-            pass
+def get_last_valid_jl_items(path: Path, n_last: int) -> List[Dict]:
+    last_lines = get_last_lines(path, n_last + 1)
     last_items = []
     for line in last_lines:
         try:
