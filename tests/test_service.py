@@ -15,31 +15,40 @@ configure_logging()
 
 
 class ATestService(Service):
-    input_topic = 'test-{}'.format(Service.input_topic)
-    ouput_topic = 'test-{}'.format(Service.output_topic)
+    queue_prefix = 'test-'
 
 
 def clear_topics():
-    for topic in [ATestService.input_topic, ATestService.output_topic]:
-        consumer = KafkaConsumer(topic, consumer_timeout_ms=100)
-        for _ in consumer:
-            pass
-        consumer.commit()
+    for service in [ATestService('trainer'), ATestService('crawler')]:
+        for topic in [
+                service.input_topic,
+                service.output_topic('progress'),
+                service.output_topic('pages'),
+                service.output_topic('model'),
+                ]:
+            consumer = KafkaConsumer(topic, consumer_timeout_ms=10)
+            for _ in consumer:
+                pass
+            consumer.commit()
 
 
 def test_service():
     clear_topics()
+    trainer_service = ATestService('trainer')
     producer = KafkaProducer(value_serializer=encode_message)
-    consumer = KafkaConsumer(
-        ATestService.output_topic,
-        value_deserializer=decode_message)
-    service = ATestService()
-    service_thread = threading.Thread(target=service.run)
-    service_thread.start()
+    (trainer_progress_consumer, trainer_pages_consumer,
+     trainer_model_consumer) = [
+        KafkaConsumer(trainer_service.output_topic(kind),
+                      value_deserializer=decode_message)
+        for kind in ['progress', 'pages', 'model']]
+    trainer_service_thread = threading.Thread(target=trainer_service.run)
+    trainer_service_thread.start()
 
-    producer.send(ATestService.input_topic, {'from-tests': 'stop'})
-    producer.flush()
-    service_thread.join()
+    def send(topic: str, message: Dict):
+        producer.send(topic, message).get()
+
+    send(trainer_service.input_topic, {'from-tests': 'stop'})
+    trainer_service_thread.join()
 
 
 def test_encode_model():

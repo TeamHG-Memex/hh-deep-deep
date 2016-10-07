@@ -13,6 +13,7 @@ from .utils import configure_logging, log_ignore_exception
 
 
 class Service:
+    queue_prefix = ''
     max_message_size = 104857600
 
     def __init__(self, queue_kind: str, kafka_host: str=None, **kwargs):
@@ -30,8 +31,10 @@ class Service:
             kafka_kwargs['bootstrap_servers'] = kafka_host
         # Together with consumer_timeout_ms, this defines responsiveness.
         self.check_updates_every = 30
+        self.input_topic = (
+            '{}dd-{}-input'.format(self.queue_prefix, self.queue_kind))
         self.consumer = KafkaConsumer(
-            'dd-{}-input'.format(self.queue_kind),
+            self.input_topic,
             consumer_timeout_ms=200,
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
@@ -132,7 +135,8 @@ class Service:
                         self.send_model_update(id_, new_model_data)
 
     def output_topic(self, kind: str) -> str:
-        return 'dd-{}-output-{}'.format(self.queue_kind, kind)
+        return '{}dd-{}-output-{}'.format(
+            self.queue_prefix, self.queue_kind, kind)
 
     def send_progress_update(self, id_: str, updates):
         progress, page_sample = updates
