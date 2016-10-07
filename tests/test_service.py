@@ -56,26 +56,25 @@ def test_service():
 
     test_id = 'test-id'
     send(trainer_service.input_topic, start_trainer_message(test_id))
-
     try:
+        debug = lambda s: print('{}  {}'.format('>' * 60, s))
         # make sure we get at least 2 of each before getting model
         for _ in range(2):
-            print('Waiting for progress message...')
+            debug('Waiting for progress message...')
             check_progress(next(trainer_progress_consumer))
-            print('Got it, now waiting for pages message...')
+            debug('Got it, now waiting for pages message...')
             check_pages(next(trainer_pages_consumer))
-            print('Got it.')
+            debug('Got it.')
 
-        print('Waiting for model, this might take a while')
+        debug('Waiting for model, this might take a while...')
         # TODO - make it appear faster adding -a checkpoint_interval=10
         model_message = next(trainer_model_consumer)
         import IPython; IPython.embed()
 
     finally:
         send(trainer_service.input_topic, stop_message(test_id))
-
-    send(trainer_service.input_topic, {'from-tests': 'stop'})
-    trainer_service_thread.join()
+        send(trainer_service.input_topic, {'from-tests': 'stop'})
+        trainer_service_thread.join()
 
 
 def check_progress(message):

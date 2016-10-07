@@ -138,6 +138,7 @@ Run tests::
         tests hh_deep_deep
 
 One test (``tests/test_service.py::test_service``) takes much longer than the others
-and can leave docker containers running if there is some error, so it's better
-to run it separately during development, adding ``-s`` flag.
+and can leave docker containers running if there is some error and
+you are unlucky or press Ctrl+C more than once before crawls are stopped.
+It's better to run it separately during development, adding ``-s`` flag.
 
