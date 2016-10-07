@@ -24,6 +24,7 @@ class DeepDeepProcess(CrawlProcess):
                  page_clf_data: bytes,
                  root: Path=None,
                  **kwargs):
+        self.checkpoint_interval = kwargs.pop('checkpoint_interval', 1000)
         super().__init__(**kwargs)
         self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
@@ -83,6 +84,7 @@ class DeepDeepProcess(CrawlProcess):
             'scrapy', 'crawl', 'relevant',
             '-a', 'seeds_url=/job/{}'.format(self.paths.seeds.name),
             '-a', 'checkpoint_path=/job',
+            '-a', 'checkpoint_interval={}'.format(self.checkpoint_interval),
             '-a', 'classifier_path=/job/{}'.format(self.paths.page_clf.name),
             '-o', '/job/items.jl',
             '-a', 'export_cdr=0',

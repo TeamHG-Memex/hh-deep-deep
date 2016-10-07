@@ -17,7 +17,8 @@ class Service:
     jobs_prefix = ''
     max_message_size = 104857600
 
-    def __init__(self, queue_kind: str, kafka_host: str=None, **kwargs):
+    def __init__(self, queue_kind: str, kafka_host: str=None,
+                 check_updates_every: int=30, **kwargs):
         self.queue_kind = queue_kind
         self.required_keys = ['id', 'seeds'] + {
             'trainer': ['page_model'],
@@ -31,7 +32,7 @@ class Service:
         if kafka_host is not None:
             kafka_kwargs['bootstrap_servers'] = kafka_host
         # Together with consumer_timeout_ms, this defines responsiveness.
-        self.check_updates_every = 30
+        self.check_updates_every = check_updates_every
         self.input_topic = (
             '{}dd-{}-input'.format(self.queue_prefix, self.queue_kind))
         self.consumer = KafkaConsumer(

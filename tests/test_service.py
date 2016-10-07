@@ -41,7 +41,8 @@ def test_service():
     # This is a big integration test, better run with "-s"
 
     clear_topics()
-    trainer_service = ATestService('trainer')
+    trainer_service = ATestService(
+        'trainer', checkpoint_interval=50, check_updates_every=2)
     producer = KafkaProducer(value_serializer=encode_message)
     (trainer_progress_consumer, trainer_pages_consumer,
      trainer_model_consumer) = [
@@ -58,16 +59,16 @@ def test_service():
     send(trainer_service.input_topic, start_trainer_message(test_id))
     try:
         debug = lambda s: print('{}  {}'.format('>' * 60, s))
-        # make sure we get at least 2 of each before getting model
-        for _ in range(2):
-            debug('Waiting for progress message...')
-            check_progress(next(trainer_progress_consumer))
-            debug('Got it, now waiting for pages message...')
+        while True:
+            debug('Waiting for pages message...')
             check_pages(next(trainer_pages_consumer))
+            debug('Got it, now waiting for progress message...')
+            progress_message = next(trainer_progress_consumer)
             debug('Got it.')
+            if check_trainer_progress(progress_message):
+                break
 
         debug('Waiting for model, this might take a while...')
-        # TODO - make it appear faster adding -a checkpoint_interval=10
         model_message = next(trainer_model_consumer)
         import IPython; IPython.embed()
 
@@ -77,14 +78,17 @@ def test_service():
         trainer_service_thread.join()
 
 
-def check_progress(message):
+def check_trainer_progress(message):
     value = message.value
     assert value['id'] == 'test-id'
     progress = value['progress']
-    assert 'pages processed' in progress
-    assert 'domains' in progress
-    assert 'relevant' in progress
-    assert 'average score' in progress
+    if progress not in {
+            'Craw is not running yet', 'Crawl started, no updates yet'}:
+        assert 'pages processed' in progress
+        assert 'domains' in progress
+        assert 'relevant' in progress
+        assert 'average score' in progress
+        return True
 
 
 def check_pages(message):
