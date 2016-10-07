@@ -1,4 +1,10 @@
+import csv
+from pathlib import Path
+import os
+import tempfile
+
 from hh_deep_deep.deepdeep_crawl import get_progress_from_item, get_sample_from_item
+from hh_deep_deep.dd_crawl import get_last_csv_items
 
 
 item = {
@@ -40,3 +46,16 @@ def test_get_progress_from_item():
 def test_get_sample_from_item():
     sample = get_sample_from_item(item)
     assert sample == {'url': 'http://example.com', 'score': 80.25}
+
+
+def test_get_last_csv_items():
+    data = [['zero', '0']] * 10 + [['one', '1'], ['two,!', '2'], ['broken']]
+    with tempfile.NamedTemporaryFile('wt', delete=False) as f:
+        csv.writer(f).writerows(data)
+    try:
+        assert get_last_csv_items(Path(f.name), 1, exp_len=1) == [['broken']]
+        assert get_last_csv_items(Path(f.name), 1, exp_len=2) == data[-2:-1]
+        assert get_last_csv_items(Path(f.name), 2, exp_len=2) == data[-3:-1]
+        assert get_last_csv_items(Path(f.name), 2, exp_len=3) == []
+    finally:
+        os.unlink(f.name)

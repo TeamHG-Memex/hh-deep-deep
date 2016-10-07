@@ -93,8 +93,8 @@ class DDCrawlerProcess(CrawlProcess):
             n_last_per_file = math.ceil(n_last / len(csv_paths))
             last_lines = []
             for csv_path in csv_paths:
-                for ts, url, _, _, score in get_last_csv_lines(
-                        csv_path, n_last_per_file):
+                for ts, url, _, _, score in get_last_csv_items(
+                        csv_path, n_last_per_file, exp_len=5):
                     last_lines.append((float(ts), url, float(score)))
             last_lines.sort(key=lambda x: x[0])
             last_lines = last_lines[-n_last:]
@@ -109,6 +109,9 @@ class DDCrawlerProcess(CrawlProcess):
             ['docker-compose'] + list(args), cwd=str(self.paths.root))
 
 
-def get_last_csv_lines(csv_path: Path, n_last: int) -> List[Dict]:
+def get_last_csv_items(csv_path: Path, n_last: int, exp_len: int) -> List[Dict]:
+    # This is only valid if there are no newlines in items
     # TODO - more efficient, skip to the end of file
-    return list(csv.reader(deque(csv_path.open('rt'), maxlen=n_last)))
+    last_lines = deque(csv_path.open('rt'), maxlen=n_last + 1)
+    last_items = [it for it in csv.reader(last_lines) if len(it) == exp_len]
+    return last_items[-n_last:]
