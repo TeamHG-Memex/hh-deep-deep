@@ -162,9 +162,9 @@ def get_last_valid_jl_items(gzip_path: Path, n_last: int) -> List[Dict]:
         except Exception:
             pass
     last_items = []
-    for line in reversed(last_lines):
+    for line in last_lines:
         try:
             last_items.append(json.loads(line))
         except Exception:
             pass
-    return last_items[:n_last]
+    return last_items[-n_last:]
