@@ -125,7 +125,9 @@ Also tweak it's config in the same way as described above, at the end of
 Testing
 -------
 
-Install ``pytest`` and ``pytest-cov``.
+Install test requirements::
+
+    pip install -r tests/requirements.txt
 
 Start kafka (see above).
 
