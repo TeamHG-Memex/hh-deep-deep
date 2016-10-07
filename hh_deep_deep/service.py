@@ -14,6 +14,7 @@ from .utils import configure_logging, log_ignore_exception
 
 class Service:
     queue_prefix = ''
+    jobs_prefix = ''
     max_message_size = 104857600
 
     def __init__(self, queue_kind: str, kafka_host: str=None, **kwargs):
@@ -42,7 +43,9 @@ class Service:
             value_serializer=encode_message,
             max_request_size=self.max_message_size,
             **kafka_kwargs)
-        self.cp_kwargs = kwargs
+        self.cp_kwargs = dict(kwargs)
+        if self.jobs_prefix:
+            self.cp_kwargs['jobs_prefix'] = self.jobs_prefix
         self.running = self.process_class.load_all_running(**self.cp_kwargs)
         if self.running:
             for id_, process in sorted(self.running.items()):

@@ -17,7 +17,7 @@ class DeepDeepPaths(CrawlPaths):
 
 
 class DeepDeepProcess(CrawlProcess):
-    jobs_root = Path('deep-deep-jobs')
+    _jobs_root = Path('deep-deep-jobs')
     default_docker_image = 'deep-deep'
 
     def __init__(self, *,

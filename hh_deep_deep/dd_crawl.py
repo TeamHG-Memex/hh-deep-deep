@@ -18,7 +18,7 @@ class DDCrawlerPaths(CrawlPaths):
 
 
 class DDCrawlerProcess(CrawlProcess):
-    jobs_root = Path('dd-jobs')
+    _jobs_root = Path('dd-jobs')
     default_docker_image = 'dd-crawler'
 
     def __init__(self, *,

@@ -1,5 +1,6 @@
 from collections import deque
 import hashlib
+import logging
 from pathlib import Path
 import math
 import time
@@ -27,7 +28,7 @@ class CrawlPaths:
 
 
 class CrawlProcess:
-    jobs_root = None
+    _jobs_root = None
     default_docker_image = None
     target_sample_rate_pm = 3  # per minute
 
@@ -36,23 +37,37 @@ class CrawlProcess:
                  seeds: List[str],
                  docker_image: str=None,
                  host_root: str=None,
-                 pid: str=None):
+                 pid: str=None,
+                 jobs_prefix: str=None):
         self.pid = pid
         self.id_ = id_
         self.seeds = seeds
         self.docker_image = docker_image or self.default_docker_image
         self.host_root = Path(host_root) if host_root is not None else None
+        self.jobs_prefix = jobs_prefix
         self.last_progress = None  # last update sent in self.get_updates
         self.last_page = None  # last page sample sent in self.get_updates
         self.last_page_time = None
+
+    @property
+    def jobs_root(self) -> Path:
+        return self.get_jobs_root(self.jobs_prefix)
+
+    @classmethod
+    def get_jobs_root(cls, jobs_prefix) -> Path:
+        if jobs_prefix:
+            return Path(jobs_prefix).joinpath(cls._jobs_root)
+        return cls._jobs_root
 
     @classmethod
     def load_all_running(cls, **kwargs) -> Dict[str, 'CrawlProcess']:
         """ Return a dictionary of currently running processes.
         """
         running = {}
-        if cls.jobs_root.exists():
-            for job_root in sorted(cls.jobs_root.iterdir()):
+        jobs_root = cls.get_jobs_root(kwargs.get('jobs_prefix'))
+        logging.info('Loading jobs from {}'.format(jobs_root))
+        if jobs_root.exists():
+            for job_root in sorted(jobs_root.iterdir()):
                 process = cls.load_running(job_root, **kwargs)
                 if process is not None:
                     old_process = running.get(process.id_)

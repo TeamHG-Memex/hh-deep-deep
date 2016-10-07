@@ -20,6 +20,7 @@ configure_logging()
 
 class ATestService(Service):
     queue_prefix = 'test-'
+    jobs_prefix = 'tests'
 
 
 def clear_topics():
@@ -55,10 +56,47 @@ def test_service():
 
     test_id = 'test-id'
     send(trainer_service.input_topic, start_trainer_message(test_id))
-    send(trainer_service.input_topic, stop_message(test_id))
+
+    try:
+        # make sure we get at least 2 of each before getting model
+        for _ in range(2):
+            print('Waiting for progress message...')
+            check_progress(next(trainer_progress_consumer))
+            print('Got it, now waiting for pages message...')
+            check_pages(next(trainer_pages_consumer))
+            print('Got it.')
+
+        print('Waiting for model, this might take a while')
+        # TODO - make it appear faster adding -a checkpoint_interval=10
+        model_message = next(trainer_model_consumer)
+        import IPython; IPython.embed()
+
+    finally:
+        send(trainer_service.input_topic, stop_message(test_id))
 
     send(trainer_service.input_topic, {'from-tests': 'stop'})
     trainer_service_thread.join()
+
+
+def check_progress(message):
+    value = message.value
+    assert value['id'] == 'test-id'
+    progress = value['progress']
+    assert 'pages processed' in progress
+    assert 'domains' in progress
+    assert 'relevant' in progress
+    assert 'average score' in progress
+
+
+def check_pages(message):
+    value = message.value
+    assert value['id'] == 'test-id'
+    page_sample = value['page_sample']
+    assert len(page_sample) >= 1
+    for s in page_sample:
+        assert isinstance(s['score'], float)
+        assert 100 >= s['score'] >= 0
+        assert s['url'].startswith('http')
 
 
 def start_trainer_message(id_: str) -> Dict:
