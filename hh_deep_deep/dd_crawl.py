@@ -36,18 +36,27 @@ class DDCrawlerProcess(CrawlProcess):
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
         """ Initialize a process from a directory.
         """
-        return None
-        # TODO - check if the process is actually running
         paths = DDCrawlerPaths(root)
         if not all(p.exists() for p in [
-                paths.id, paths.seeds, paths.page_clf, paths.link_clf]):
+                paths.pid, paths.id, paths.seeds, paths.page_clf, paths.link_clf]):
+            return
+        running_containers = (
+            subprocess.check_output(['docker-compose', 'ps', '-q'],
+                                    cwd=str(paths.root))
+            .decode('utf8').strip().split('\n'))
+        if len(running_containers) < 2:
+            # Only container is not normal,
+            # should be at least redis and one crawler.
+            logging.info('Cleaning up job in {}.'.format(paths.root))
+            subprocess.check_call(
+                ['docker-compose', 'down', '-v'], cwd=str(paths.root))
+            paths.pid.unlink()
             return
         with paths.seeds.open('rt') as f:
             seeds = [line.strip() for line in f]
-        id_ = paths.id.read_text()
         return cls(
-            pid=id_,
-            id_=id_,
+            pid=paths.pid.read_text(),
+            id_=paths.id.read_text(),
             seeds=seeds,
             page_clf_data=paths.page_clf.read_bytes(),
             link_clf_data=paths.link_clf.read_bytes(),
@@ -73,15 +82,17 @@ class DDCrawlerProcess(CrawlProcess):
         redis_config = cur_dir.joinpath('redis.conf').read_text()
         self.paths.redis_conf.write_text(redis_config)
         logging.info('Starting crawl in {}'.format(self.paths.root))
-        self._compose_cmd('up', '-d')
+        self._compose_call('up', '-d')
         n_processes = multiprocessing.cpu_count()
-        self._compose_cmd('scale', 'crawler={}'.format(n_processes))
-        logging.info('Crawl "{}" started'.format(self.id_))
+        self._compose_call('scale', 'crawler={}'.format(n_processes))
         self.pid = self.id_
+        self.paths.pid.write_text(self.pid)
+        logging.info('Crawl "{}" started'.format(self.id_))
 
     def stop(self):
         assert self.pid is not None
-        self._compose_cmd('down', '-v')
+        self._compose_call('down', '-v')
+        self.paths.pid.unlink()
         logging.info('Crawl "{}" stopped'.format(self.pid))
         self.pid = None
 
@@ -103,7 +114,7 @@ class DDCrawlerProcess(CrawlProcess):
             pages = []
         return 'TODO', pages
 
-    def _compose_cmd(self, *args):
+    def _compose_call(self, *args):
         subprocess.check_call(
             ['docker-compose'] + list(args), cwd=str(self.paths.root))
 

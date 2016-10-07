@@ -14,7 +14,6 @@ class DeepDeepPaths(CrawlPaths):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.items = self.root.joinpath('items.jl')
-        self.pid = self.root.joinpath('pid.txt')
 
 
 class DeepDeepProcess(CrawlProcess):
@@ -36,7 +35,7 @@ class DeepDeepProcess(CrawlProcess):
         """
         paths = DeepDeepPaths(root)
         if not all(p.exists() for p in [
-                paths.id, paths.pid, paths.seeds, paths.page_clf]):
+                paths.pid, paths.id, paths.seeds, paths.page_clf]):
             return
         pid = paths.pid.read_text()
         try:
