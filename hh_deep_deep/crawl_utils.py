@@ -73,6 +73,9 @@ class CrawlProcess:
     def stop(self):
         raise NotImplementedError
 
+    def is_running(self):
+        raise NotImplementedError
+
     def get_updates(self) -> Tuple[Optional[str], Optional[List[Dict]]]:
         """ Return a tuple of progress update, and a list (possibly empty)
         of sample crawled urls.

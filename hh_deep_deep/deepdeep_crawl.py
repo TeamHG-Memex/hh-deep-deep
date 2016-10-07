@@ -38,18 +38,12 @@ class DeepDeepProcess(CrawlProcess):
                 paths.pid, paths.id, paths.seeds, paths.page_clf]):
             return
         pid = paths.pid.read_text()
-        try:
-            inspect_result = json.loads(subprocess.check_output(
-                ['docker', 'inspect', pid]).decode('utf8'))
-        except subprocess.CalledProcessError:
+        if not cls._is_running(pid):
             paths.pid.unlink()
-            return
-        assert len(inspect_result) == 1
-        state = inspect_result[0]['State']
-        if not state.get('Running'):
-            # Remove stopped crawl container and pid file
-            paths.pid.unlink()
-            subprocess.check_output(['docker', 'rm', pid])
+            try:
+                subprocess.check_output(['docker', 'rm', pid])
+            except subprocess.CalledProcessError:
+                pass
             return
         with paths.seeds.open('rt') as f:
             seeds = [url for url, in csv.reader(f)]
@@ -60,6 +54,20 @@ class DeepDeepProcess(CrawlProcess):
             page_clf_data=paths.page_clf.read_bytes(),
             root=root,
             **kwargs)
+
+    @staticmethod
+    def _is_running(pid):
+        try:
+            inspect_result = json.loads(subprocess.check_output(
+                ['docker', 'inspect', pid]).decode('utf8'))
+        except subprocess.CalledProcessError:
+            return False
+        assert len(inspect_result) == 1
+        state = inspect_result[0]['State']
+        return bool(state.get('Running'))
+
+    def is_running(self):
+        return self.pid is not None and self._is_running(self.pid)
 
     def start(self):
         assert self.pid is None
@@ -89,9 +97,15 @@ class DeepDeepProcess(CrawlProcess):
 
     def stop(self):
         assert self.pid is not None
-        subprocess.check_output(['docker', 'stop', self.pid])
+        try:
+            subprocess.check_output(['docker', 'stop', self.pid])
+        except subprocess.CalledProcessError:
+            pass  # might be dead already
         logging.info('Crawl stopped, removing container')
-        subprocess.check_output(['docker', 'rm', self.pid])
+        try:
+            subprocess.check_call(['docker', 'rm', self.pid])
+        except subprocess.CalledProcessError:
+            pass  # might be removed already
         self.paths.pid.unlink()
         logging.info('Removed container id {}'.format(self.pid))
         self.pid = None

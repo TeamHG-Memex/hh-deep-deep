@@ -117,13 +117,19 @@ class Service:
 
     @log_ignore_exception
     def send_updates(self):
-        for id_, process in self.running.items():
-            updates = process.get_updates()
-            self.send_progress_update(id_, updates)
-            if hasattr(process, 'get_new_model'):
-                new_model_data = process.get_new_model()
-                if new_model_data is not None:
-                    self.send_model_update(id_, new_model_data)
+        for id_, process in list(self.running.items()):
+            if not process.is_running():
+                logging.warning(
+                    'Crawl should be running but it\'s not, stopping.')
+                process.stop()
+                self.running.pop(id_)
+            else:
+                updates = process.get_updates()
+                self.send_progress_update(id_, updates)
+                if hasattr(process, 'get_new_model'):
+                    new_model_data = process.get_new_model()
+                    if new_model_data is not None:
+                        self.send_model_update(id_, new_model_data)
 
     def output_topic(self, kind: str) -> str:
         return 'dd-{}-output-{}'.format(self.queue_kind, kind)

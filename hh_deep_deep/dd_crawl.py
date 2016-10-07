@@ -40,14 +40,8 @@ class DDCrawlerProcess(CrawlProcess):
         if not all(p.exists() for p in [
                 paths.pid, paths.id, paths.seeds, paths.page_clf, paths.link_clf]):
             return
-        running_containers = (
-            subprocess.check_output(['docker-compose', 'ps', '-q'],
-                                    cwd=str(paths.root))
-            .decode('utf8').strip().split('\n'))
-        if len(running_containers) < 2:
-            # Only container is not normal,
-            # should be at least redis and one crawler.
-            logging.info('Cleaning up job in {}.'.format(paths.root))
+        if not cls._is_running(paths.root):
+            logging.warning('Cleaning up job in {}.'.format(paths.root))
             subprocess.check_call(
                 ['docker-compose', 'down', '-v'], cwd=str(paths.root))
             paths.pid.unlink()
@@ -62,6 +56,18 @@ class DDCrawlerProcess(CrawlProcess):
             link_clf_data=paths.link_clf.read_bytes(),
             root=root,
             **kwargs)
+
+    @staticmethod
+    def _is_running(root: Path):
+        running_containers = (
+            subprocess.check_output(['docker-compose', 'ps', '-q'], cwd=str(root))
+            .decode('utf8').strip().split('\n'))
+        # Only container is not normal,
+        # should be at least redis and one crawler.
+        return len(running_containers) >= 2
+
+    def is_running(self):
+        return self.pid is not None and self._is_running(self.paths.root)
 
     def start(self):
         assert self.pid is None
