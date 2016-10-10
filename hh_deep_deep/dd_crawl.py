@@ -25,12 +25,14 @@ class DDCrawlerProcess(CrawlProcess):
                  page_clf_data: bytes,
                  link_clf_data: bytes,
                  root: Path=None,
+                 max_workers: int=None,
                  **kwargs):
         super().__init__(**kwargs)
         self.paths = DDCrawlerPaths(
             root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.link_clf_data = link_clf_data
+        self.max_workers = max_workers
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
@@ -90,6 +92,8 @@ class DDCrawlerProcess(CrawlProcess):
         logging.info('Starting crawl in {}'.format(self.paths.root))
         self._compose_call('up', '-d')
         n_processes = multiprocessing.cpu_count()
+        if self.max_workers:
+            n_processes = min(self.max_workers, n_processes)
         self._compose_call('scale', 'crawler={}'.format(n_processes))
         self.pid = self.id_
         self.paths.pid.write_text(self.pid)

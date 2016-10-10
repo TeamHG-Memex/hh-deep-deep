@@ -23,11 +23,12 @@ class DeepDeepProcess(CrawlProcess):
     def __init__(self, *,
                  page_clf_data: bytes,
                  root: Path=None,
+                 checkpoint_interval: int=1000,
                  **kwargs):
-        self.checkpoint_interval = kwargs.pop('checkpoint_interval', 1000)
         super().__init__(**kwargs)
         self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
+        self.checkpoint_interval = checkpoint_interval
         self.last_model_file = None  # last model sent in self.get_new_model
 
     @classmethod
