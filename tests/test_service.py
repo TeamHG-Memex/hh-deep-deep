@@ -69,8 +69,9 @@ def test_service():
                 break
 
         debug('Waiting for model, this might take a while...')
-        model_message = next(trainer_model_consumer)
-        import IPython; IPython.embed()
+        model_message = next(trainer_model_consumer).value
+        assert model_message['id'] == test_id
+        link_model = model_message['link_model']
 
     finally:
         send(trainer_service.input_topic, stop_message(test_id))
