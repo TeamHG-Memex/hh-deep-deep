@@ -191,11 +191,15 @@ def main():
     arg('--docker-image', help='Name of docker image for the crawler')
     arg('--kafka-host')
     arg('--host-root', help='Pass host ${PWD} if running in a docker container')
+    arg('--max-workers', type=int, help='Only for "crawler"')
     args = parser.parse_args()
 
     configure_logging()
+    kwargs = {}
+    if args.max_workers:
+        kwargs['max_workers'] = args.max_workers
     service = Service(
         args.kind, kafka_host=args.kafka_host, docker_image=args.docker_image,
-        host_root=args.host_root)
+        host_root=args.host_root, **kwargs)
     logging.info('Starting hh dd-{} service'.format(args.kind))
     service.run()
