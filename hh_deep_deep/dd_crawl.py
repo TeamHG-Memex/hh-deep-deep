@@ -111,18 +111,43 @@ class DDCrawlerProcess(CrawlProcess):
         csv_paths = list(self.paths.out.glob('*.csv'))
         if csv_paths:
             n_last_per_file = math.ceil(n_last / len(csv_paths))
-            last_lines = []
+            last_pages = []
+            total_score = n_crawled = n_domains = n_relevant_domains = 0
             for csv_path in csv_paths:
-                for ts, url, _, _, score in get_last_csv_items(
-                        csv_path, n_last_per_file, exp_len=5):
-                    last_lines.append((float(ts), url, float(score)))
-            last_lines.sort(key=lambda x: x[0])
-            last_lines = last_lines[-n_last:]
+                last_items = get_last_csv_items(
+                    csv_path, n_last_per_file, exp_len=9)
+                for item in last_items:
+                    ts, url, _, _, score = item[:5]
+                    last_pages.append((float(ts), url, float(score)))
+                if last_items:
+                    _total_score, _n_crawled, _n_domains, _n_relevant_domains\
+                        = last_items[-1][5:]
+                    total_score += float(_total_score)
+                    n_crawled += int(_n_crawled)
+                    # A very small fraction (before "scale crawler=N")
+                    # might overlap between workers, more might overlap
+                    # in case some workers die.
+                    n_domains += int(_n_domains)
+                    n_relevant_domains += int(_n_relevant_domains)
+            last_pages.sort(key=lambda x: x[0])
+            last_pages = last_pages[-n_last:]
             pages = [{'url': url, 'score': 100 * score}
-                        for _, url, score in last_lines]
+                     for _, url, score in last_pages]
+            if n_crawled == 0:
+                progress = 'Crawl started, no updates yet'
+            else:
+                progress = (
+                    '{n_crawled:,} pages processed from {n_domains:,} domains '
+                    '({n_relevant_domains:,} relevant), '
+                    'average score {mean_score:.1f}.'.format(
+                        n_crawled=n_crawled,
+                        n_domains=n_domains,
+                        n_relevant_domains=n_relevant_domains,
+                        mean_score=total_score / n_crawled,
+                    ))
         else:
-            pages = []
-        return 'TODO', pages
+            progress, pages = 'Craw is not running yet', []
+        return progress, pages
 
     def _compose_call(self, *args):
         subprocess.check_call(

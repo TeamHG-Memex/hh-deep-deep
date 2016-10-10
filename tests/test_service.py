@@ -2,7 +2,7 @@ import json
 import logging
 import threading
 import pickle
-from typing import Dict, Callable
+from typing import Dict, Callable, List
 
 from kafka import KafkaConsumer, KafkaProducer
 from sklearn.pipeline import Pipeline
@@ -23,13 +23,17 @@ class ATestService(Service):
 
 
 def clear_topics():
+    # TODO - do this without creating services and with one consumer
+    # to save time
     for service in [ATestService('trainer'), ATestService('crawler')]:
-        for topic in [
-                service.input_topic,
-                service.output_topic('progress'),
-                service.output_topic('pages'),
-                service.output_topic('model'),
-                ]:
+        topics = [
+            service.input_topic,
+            service.output_topic('progress'),
+            service.output_topic('pages'),
+        ]
+        if service.queue_kind == 'trainer':
+            topics.append(service.output_topic('model'))
+        for topic in topics:
             consumer = KafkaConsumer(topic, consumer_timeout_ms=10)
             for _ in consumer:
                 pass
@@ -58,8 +62,7 @@ def _test_trainer_service(test_id: str, send: Callable[[str, Dict], None])\
     """
     trainer_service = ATestService(
         'trainer', checkpoint_interval=50, check_updates_every=2)
-    (trainer_progress_consumer, trainer_pages_consumer,
-     trainer_model_consumer) = [
+    progress_consumer, pages_consumer, model_consumer = [
         KafkaConsumer(trainer_service.output_topic(kind),
                       value_deserializer=decode_message)
         for kind in ['progress', 'pages', 'model']]
@@ -70,17 +73,10 @@ def _test_trainer_service(test_id: str, send: Callable[[str, Dict], None])\
     debug('Sending start trainer message')
     send(trainer_service.input_topic, start_message)
     try:
-        while True:
-            debug('Waiting for pages message...')
-            check_pages(next(trainer_pages_consumer))
-            debug('Got it, now waiting for progress message...')
-            progress_message = next(trainer_progress_consumer)
-            debug('Got it.')
-            if check_trainer_progress(progress_message):
-                break
-
+        _check_progress_pages(progress_consumer, pages_consumer)
         debug('Waiting for model, this might take a while...')
-        model_message = next(trainer_model_consumer).value
+        model_message = next(model_consumer).value
+        debug('Got it.')
         assert model_message['id'] == test_id
         link_model = model_message['link_model']
 
@@ -93,11 +89,22 @@ def _test_trainer_service(test_id: str, send: Callable[[str, Dict], None])\
     return start_message
 
 
+def _check_progress_pages(progress_consumer, pages_consumer):
+    while True:
+        debug('Waiting for pages message...')
+        check_pages(next(pages_consumer))
+        debug('Got it, now waiting for progress message...')
+        progress_message = next(progress_consumer)
+        debug('Got it:', progress_message.value.get('progress'))
+        if check_progress(progress_message):
+            break
+
+
 def _test_crawler_service(test_id: str, send: Callable[[str, Dict], None],
                           start_message: Dict) -> None:
     crawler_service = ATestService(
         'crawler', check_updates_every=2, max_workers=2)
-    crawler_progress_consumer, crawler_pages_consumer = [
+    progress_consumer, pages_consumer = [
         KafkaConsumer(crawler_service.output_topic(kind),
                       value_deserializer=decode_message)
         for kind in ['progress', 'pages']]
@@ -107,23 +114,18 @@ def _test_crawler_service(test_id: str, send: Callable[[str, Dict], None],
     debug('Sending start crawler message')
     send(crawler_service.input_topic, start_message)
     try:
-        debug('Waiting for pages message...')
-        check_pages(next(crawler_pages_consumer))
-        debug('Got it, now waiting for progress message...')
-        progress_message = next(crawler_progress_consumer)
-        # TODO - check it
-        debug('Got it.')
+        _check_progress_pages(progress_consumer, pages_consumer)
     finally:
         send(crawler_service.input_topic, stop_crawl_message(test_id))
         send(crawler_service.input_topic, {'from-tests': 'stop'})
         crawler_service_thread.join()
 
 
-def debug(s: str) -> None:
-    print('{}  {}'.format('>' * 60, s))
+def debug(*args: List[str]) -> None:
+    print('{} '.format('>' * 60), *args)
 
 
-def check_trainer_progress(message):
+def check_progress(message):
     value = message.value
     assert value['id'] == 'test-id'
     progress = value['progress']
