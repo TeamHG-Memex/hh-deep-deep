@@ -73,7 +73,8 @@ def _test_trainer_service(test_id: str, send: Callable[[str, Dict], None])\
     debug('Sending start trainer message')
     send(trainer_service.input_topic, start_message)
     try:
-        _check_progress_pages(progress_consumer, pages_consumer)
+        _check_progress_pages(progress_consumer, pages_consumer,
+                              check_trainer=True)
         debug('Waiting for model, this might take a while...')
         model_message = next(model_consumer).value
         debug('Got it.')
@@ -89,14 +90,17 @@ def _test_trainer_service(test_id: str, send: Callable[[str, Dict], None])\
     return start_message
 
 
-def _check_progress_pages(progress_consumer, pages_consumer):
+def _check_progress_pages(progress_consumer, pages_consumer,
+                          check_trainer=False):
     while True:
         debug('Waiting for pages message...')
         check_pages(next(pages_consumer))
         debug('Got it, now waiting for progress message...')
         progress_message = next(progress_consumer)
         debug('Got it:', progress_message.value.get('progress'))
-        if check_progress(progress_message):
+        progress = check_progress(progress_message)
+        if not check_trainer or (
+                progress and 'Last deep-deep model checkpoint' in progress):
             break
 
 
@@ -135,7 +139,7 @@ def check_progress(message):
         assert 'domains' in progress
         assert 'relevant' in progress
         assert 'average score' in progress
-        return True
+        return progress
 
 
 def check_pages(message):

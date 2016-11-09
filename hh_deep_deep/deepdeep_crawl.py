@@ -29,7 +29,8 @@ class DeepDeepProcess(CrawlProcess):
         self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.checkpoint_interval = checkpoint_interval
-        self.last_model_file = None  # last model sent in self.get_new_model
+        # last model sent in self.get_new_model
+        self.last_model_file = None  # type: Path
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DeepDeepProcess']:
@@ -119,9 +120,15 @@ class DeepDeepProcess(CrawlProcess):
         n_last = self.get_n_last()
         last_items = get_last_valid_jl_items(self.paths.items, n_last)
         if last_items:
-            progress = get_progress_from_item(last_items[-1])
+            item_progress = get_progress_from_item(last_items[-1])
             pages = [get_sample_from_item(item) for item in last_items
                      if 'url' in item]
+            if self.last_model_file:
+                model_progress = ('Last deep-deep model checkpoint {}.'
+                                  .format(self.last_model_file.name))
+            else:
+                model_progress = 'No model checkpoints yet.'
+            progress = '{} {}'.format(item_progress, model_progress)
             return progress, pages
         else:
             return 'Crawl started, no updates yet', []
