@@ -99,8 +99,14 @@ class DeepDeepProcess(CrawlProcess):
         logging.info('Crawl started, container id {}'.format(self.pid))
         self.paths.pid.write_text(self.pid)
 
-    def stop(self):
+    def stop(self, verbose=False):
         assert self.pid is not None
+        if verbose:
+            try:
+                subprocess.check_output(
+                    ['docker', 'logs', '--tail', '30', self.pid])
+            except subprocess.CalledProcessError:
+                pass  # might be dead already
         try:
             subprocess.check_output(['docker', 'stop', self.pid])
         except subprocess.CalledProcessError:

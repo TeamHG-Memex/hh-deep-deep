@@ -128,7 +128,7 @@ class Service:
             if not process.is_running():
                 logging.warning(
                     'Crawl should be running but it\'s not, stopping.')
-                process.stop()
+                process.stop(verbose=True)
                 self.running.pop(id_)
             else:
                 updates = process.get_updates()

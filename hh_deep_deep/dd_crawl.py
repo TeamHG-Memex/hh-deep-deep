@@ -99,8 +99,10 @@ class DDCrawlerProcess(CrawlProcess):
         self.paths.pid.write_text(self.pid)
         logging.info('Crawl "{}" started'.format(self.id_))
 
-    def stop(self):
+    def stop(self, verbose=False):
         assert self.pid is not None
+        if verbose:
+            self._compose_call('logs', '--tail', '30')
         self._compose_call('down', '-v')
         self.paths.pid.unlink()
         logging.info('Crawl "{}" stopped'.format(self.pid))
