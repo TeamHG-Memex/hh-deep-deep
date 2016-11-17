@@ -5,9 +5,7 @@ import pickle
 from typing import Dict, Callable, List
 
 from kafka import KafkaConsumer, KafkaProducer
-from sklearn.pipeline import Pipeline
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.linear_model import LogisticRegression
+from hh_page_clf.model import DefaultModel
 
 from hh_deep_deep.service import Service, encode_message, \
     encode_model_data, decode_model_data
@@ -154,22 +152,21 @@ def check_pages(message):
 
 
 def start_trainer_message(id_: str) -> Dict:
-    pipeline = Pipeline([
-        ('vec', CountVectorizer(binary=True)),
-        ('clf', LogisticRegression()),
-        ])
-    pipeline.fit(['a good day', 'feeling nice today', 'it is sunny',
-                  'what a mess', 'who invented it', 'so boring', 'stupid'],
-                 [1, 1, 1, 0, 0, 0, 0])
+    model = DefaultModel()
+    model.fit(
+        [{'url': 'http://a.com', 'text': text}
+         for text in ['a good day', 'feeling nice today', 'it is sunny',
+                      'what a mess', 'who invented it', 'so boring', 'stupid']],
+        [1, 1, 1, 0, 0, 0, 0])
     return {
         'id': id_,
-        'page_model': encode_model_data(pickle.dumps(pipeline)),
+        'page_model': encode_model_data(pickle.dumps(model)),
         'seeds': ['http://wikipedia.org', 'http://news.ycombinator.com'],
     }
 
 
 def stop_crawl_message(id_: str) -> Dict:
-    return {'id': id_, 'stop': True}
+    return {'id': id_, 'stop': True, 'verbose': True}
 
 
 def test_encode_model():
@@ -178,6 +175,9 @@ def test_encode_model():
     assert data == decode_model_data(encode_model_data(data))
     assert decode_model_data(None) is None
     assert encode_model_data(None) is None
+
+
+# TODO - test that encode_model_data and encode_object from hh_page_classifier are in sync
 
 
 def decode_message(message: bytes) -> Dict:

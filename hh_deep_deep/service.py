@@ -117,7 +117,7 @@ class Service:
         logging.info('Got stop crawl message with id "{}"'.format(id_))
         process = self.running.get(id_)
         if process is not None:
-            process.stop()
+            process.stop(verbose=request.get('verbose'))
             self.running.pop(id_)
         else:
             logging.info('Crawl with id "{}" is not running'.format(id_))

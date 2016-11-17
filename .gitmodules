@@ -1,0 +1,3 @@
+[submodule "docker/hh-page-classifier"]
+	path = docker/hh-page-classifier
+	url = git@github.com:TeamHG-Memex/hh-page-classifier.git

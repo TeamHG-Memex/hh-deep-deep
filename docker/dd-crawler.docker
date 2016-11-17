@@ -1,0 +1,5 @@
+# FROM dd-crawler
+FROM docker.hyperiongray.com/dd-crawler:0.0.4
+
+COPY hh-page-classifier hh-page-classifier
+RUN pip install -e ./hh-page-classifier

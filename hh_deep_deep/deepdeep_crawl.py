@@ -18,7 +18,7 @@ class DeepDeepPaths(CrawlPaths):
 
 class DeepDeepProcess(CrawlProcess):
     _jobs_root = Path('deep-deep-jobs')
-    default_docker_image = 'deep-deep'
+    default_docker_image = 'deep-deep-hh'
 
     def __init__(self, *,
                  page_clf_data: bytes,
@@ -88,6 +88,7 @@ class DeepDeepProcess(CrawlProcess):
             '-a', 'checkpoint_path=/job',
             '-a', 'checkpoint_interval={}'.format(self.checkpoint_interval),
             '-a', 'classifier_path=/job/{}'.format(self.paths.page_clf.name),
+            '-a', 'classifier_input=text_url',
             '-o', '/job/items.jl',
             '-a', 'export_cdr=0',
             '--logfile', '/job/spider.log',

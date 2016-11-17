@@ -1,5 +1,3 @@
+-e ../docker/hh-page-classifier
 pytest
 pytest-cov
-numpy==1.11.1
-scikit-learn==0.17.1
-scipy==0.18.1

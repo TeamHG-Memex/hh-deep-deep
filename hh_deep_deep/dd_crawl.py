@@ -19,7 +19,7 @@ class DDCrawlerPaths(CrawlPaths):
 
 class DDCrawlerProcess(CrawlProcess):
     _jobs_root = Path('dd-jobs')
-    default_docker_image = 'dd-crawler'
+    default_docker_image = 'dd-crawler-hh'
 
     def __init__(self, *,
                  page_clf_data: bytes,

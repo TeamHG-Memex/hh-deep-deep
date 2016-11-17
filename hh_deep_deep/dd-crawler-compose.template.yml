@@ -30,6 +30,8 @@ services:
       - clf=/dd_crawler/Q.joblib
       - -a
       - page_clf=/dd_crawler/page_clf.joblib
+      - -a
+      - classifier_input=text_url
     dns:
       - 127.0.0.1
     links:

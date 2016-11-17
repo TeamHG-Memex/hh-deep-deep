@@ -131,6 +131,11 @@ Install test requirements::
 
 Start kafka (see above).
 
+Make sure you have ``dd-crawler-hh`` and ``deep-deep-hh`` images
+(set in ``default_docker_image`` property of
+``DDCrawlerProcess`` and ``DeepDeepProcess``).
+These images can be built using dockerfiles in the ``./docker/`` folder.
+
 Run tests::
 
     py.test --doctest-modules \
