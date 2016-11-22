@@ -4,6 +4,7 @@ THH deep-deep integration
 This is a service that listens to kafka topic and starts/stops deep-deep crawler,
 sends back progress updates, samples of crawled pages and
 
+.. contents::
 
 Protocol
 --------
@@ -72,7 +73,16 @@ instead of ``network_mode: host``, but that will not work with local kafka.
 
 Start trainer, modeler and crawler services with::
 
-    docker-compose up -d
+    docker-compose up --build -d
+
+In order to update existing installation, do::
+
+    git pull
+    git submodule update --init
+
+
+Local Kafka with Docker
++++++++++++++++++++++++
 
 If you want to use a local kafka, just add ``127.0.0.1   hh-kafka`` to ``/etc/hosts``,
 and star kafka with::
@@ -98,6 +108,7 @@ In order to raise the limit, do the following in the kafka container::
 
 For some reason, pushing messages does not work after stop/start.
 
+
 Usage without Docker
 --------------------
 
@@ -107,8 +118,8 @@ Run the service passing kafka host as ``--kafka-host``
     hh-deep-deep-service [trainer|crawler] --kafka-host hh-kafka
 
 
-Running local kafka
--------------------
+Local kafka without docker
+++++++++++++++++++++++++++
 
 Start local kafka with::
 
