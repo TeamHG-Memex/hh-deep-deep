@@ -48,7 +48,7 @@ class DDCrawlerProcess(CrawlProcess):
                 ['docker-compose', 'down', '-v'], cwd=str(paths.root))
             paths.pid.unlink()
             return
-        with paths.seeds.open('rt') as f:
+        with paths.seeds.open('rt', encoding='utf8') as f:
             seeds = [line.strip() for line in f]
         return cls(
             pid=paths.pid.read_text(),

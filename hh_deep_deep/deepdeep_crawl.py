@@ -48,7 +48,7 @@ class DeepDeepProcess(CrawlProcess):
             except subprocess.CalledProcessError:
                 pass
             return
-        with paths.seeds.open('rt') as f:
+        with paths.seeds.open('rt', encoding='utf8') as f:
             seeds = [url for url, in csv.reader(f)]
         return cls(
             pid=pid,
@@ -77,7 +77,7 @@ class DeepDeepProcess(CrawlProcess):
         self.paths.mkdir()
         self.paths.id.write_text(self.id_)
         self.paths.page_clf.write_bytes(self.page_clf_data)
-        with self.paths.seeds.open('wt') as f:
+        with self.paths.seeds.open('wt', encoding='utf8') as f:
             csv.writer(f).writerows([url] for url in self.seeds)
         args = [
             'docker', 'run', '-d',

@@ -137,5 +137,5 @@ class CrawlProcess:
 def get_last_lines(path: Path, n_last: int) -> List[str]:
     # This is only valid if there are no newlines in items
     # TODO - more efficient, skip to the end of file
-    with path.open('rt') as f:
+    with path.open('rt', encoding='utf8') as f:
         return list(deque(f, maxlen=n_last))
