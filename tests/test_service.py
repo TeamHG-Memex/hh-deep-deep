@@ -7,12 +7,14 @@ from typing import Dict, Callable, List
 from kafka import KafkaConsumer, KafkaProducer
 from hh_page_clf.model import DefaultModel
 
-from hh_deep_deep.service import Service, encode_message, \
-    encode_model_data, decode_model_data
+from hh_deep_deep.service import Service, encode_model_data, decode_model_data
 from hh_deep_deep.utils import configure_logging
 
 
 configure_logging()
+
+
+DEBUG = True
 
 
 class ATestService(Service):
@@ -59,7 +61,7 @@ def _test_trainer_service(test_id: str, send: Callable[[str, Dict], None])\
     """ Test trainer service, return start message for crawler service.
     """
     trainer_service = ATestService(
-        'trainer', checkpoint_interval=50, check_updates_every=2)
+        'trainer', checkpoint_interval=50, check_updates_every=2, debug=DEBUG)
     progress_consumer, pages_consumer, model_consumer = [
         KafkaConsumer(trainer_service.output_topic(kind),
                       value_deserializer=decode_message)
@@ -105,7 +107,7 @@ def _check_progress_pages(progress_consumer, pages_consumer,
 def _test_crawler_service(test_id: str, send: Callable[[str, Dict], None],
                           start_message: Dict) -> None:
     crawler_service = ATestService(
-        'crawler', check_updates_every=2, max_workers=2)
+        'crawler', check_updates_every=2, max_workers=2, debug=DEBUG)
     progress_consumer, pages_consumer = [
         KafkaConsumer(crawler_service.output_topic(kind),
                       value_deserializer=decode_message)
@@ -177,7 +179,8 @@ def test_encode_model():
     assert encode_model_data(None) is None
 
 
-# TODO - test that encode_model_data and encode_object from hh_page_classifier are in sync
+# TODO - test that encode_model_data and encode_object
+# from hh_page_classifier are in sync
 
 
 def decode_message(message: bytes) -> Dict:
@@ -185,4 +188,12 @@ def decode_message(message: bytes) -> Dict:
         return json.loads(message.decode('utf8'))
     except Exception as e:
         logging.error('Error deserializing message', exc_info=e)
+        raise
+
+
+def encode_message(message: Dict) -> bytes:
+    try:
+        return json.dumps(message).encode('utf8')
+    except Exception as e:
+        logging.error('Error serializing message', exc_info=e)
         raise

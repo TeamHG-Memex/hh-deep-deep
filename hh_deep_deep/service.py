@@ -1,5 +1,7 @@
 import argparse
 import base64
+import gzip
+import hashlib
 import logging
 import json
 from typing import Dict, Optional
@@ -17,8 +19,12 @@ class Service:
     jobs_prefix = ''
     max_message_size = 104857600
 
-    def __init__(self, queue_kind: str, kafka_host: str=None,
-                 check_updates_every: int=30, **kwargs):
+    def __init__(self,
+                 queue_kind: str,
+                 kafka_host: str=None,
+                 check_updates_every: int=30,
+                 debug: bool=False,
+                 **crawler_process_kwargs):
         self.queue_kind = queue_kind
         self.required_keys = ['id', 'seeds'] + {
             'trainer': ['page_model'],
@@ -33,6 +39,7 @@ class Service:
             kafka_kwargs['bootstrap_servers'] = kafka_host
         # Together with consumer_timeout_ms, this defines responsiveness.
         self.check_updates_every = check_updates_every
+        self.debug = debug
         self.input_topic = (
             '{}dd-{}-input'.format(self.queue_prefix, self.queue_kind))
         self.consumer = KafkaConsumer(
@@ -41,13 +48,13 @@ class Service:
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
         self.producer = KafkaProducer(
-            value_serializer=encode_message,
             max_request_size=self.max_message_size,
             **kafka_kwargs)
-        self.cp_kwargs = dict(kwargs)
+        self.crawler_process_kwargs = dict(crawler_process_kwargs)
         if self.jobs_prefix:
-            self.cp_kwargs['jobs_prefix'] = self.jobs_prefix
-        self.running = self.process_class.load_all_running(**self.cp_kwargs)
+            self.crawler_process_kwargs['jobs_prefix'] = self.jobs_prefix
+        self.running = self.process_class.load_all_running(
+            **self.crawler_process_kwargs)
         if self.running:
             for id_, process in sorted(self.running.items()):
                 logging.info(
@@ -63,6 +70,7 @@ class Service:
         while True:
             counter += 1
             for message in self.consumer:
+                self._debug_save_message(message.value, 'incoming')
                 try:
                     value = json.loads(message.value.decode('utf8'))
                 except Exception as e:
@@ -102,7 +110,7 @@ class Service:
         current_process = self.running.pop(id_, None)
         if current_process is not None:
             current_process.stop()
-        kwargs = dict(self.cp_kwargs)
+        kwargs = dict(self.crawler_process_kwargs)
         kwargs['seeds'] = request['seeds']
         kwargs['page_clf_data'] = decode_model_data(request['page_model'])
         if 'link_model' in request:
@@ -162,16 +170,18 @@ class Service:
                      .format(topic, len(encoded_model)))
         self.send(topic, {'id': id_, 'link_model': encoded_model})
 
-    def send(self, topic: str, message: Dict):
+    def send(self, topic: str, result: Dict):
+        message = json.dumps(result).encode('utf8')
+        self._debug_save_message(message, 'outgoing to {}'.format(topic))
         self.producer.send(topic, message).get()
 
-
-def encode_message(message: Dict) -> bytes:
-    try:
-        return json.dumps(message).encode('utf8')
-    except Exception as e:
-        logging.error('Error serializing message', exc_info=e)
-        raise
+    def _debug_save_message(self, message: bytes, kind: str) -> None:
+        if self.debug:
+            filename = ('hh-page-clf-{}.json.gz'
+                        .format(hashlib.md5(message).hexdigest()))
+            logging.info('Saving {} message to {}'.format(kind, filename))
+            with gzip.open(filename, 'wb') as f:
+                f.write(message)
 
 
 def encode_model_data(data: Optional[bytes]) -> Optional[str]:
@@ -192,14 +202,16 @@ def main():
     arg('--kafka-host')
     arg('--host-root', help='Pass host ${PWD} if running in a docker container')
     arg('--max-workers', type=int, help='Only for "crawler"')
+    arg('--debug', action='store_true')
     args = parser.parse_args()
 
     configure_logging()
-    kwargs = {}
+    cp_kwargs = {}
     if args.max_workers:
-        kwargs['max_workers'] = args.max_workers
+        cp_kwargs['max_workers'] = args.max_workers
     service = Service(
         args.kind, kafka_host=args.kafka_host, docker_image=args.docker_image,
-        host_root=args.host_root, **kwargs)
+        host_root=args.host_root, debug=args.debug,
+        **cp_kwargs)
     logging.info('Starting hh dd-{} service'.format(args.kind))
     service.run()
