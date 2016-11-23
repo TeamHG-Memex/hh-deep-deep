@@ -32,7 +32,7 @@ services:
       - --host-root=${PWD}
 
   hh-modeler:
-    image: docker.hyperiongray.com/hh-page-clf:0.1.4  # update git submodule too
+    image: docker.hyperiongray.com/hh-page-clf:0.1.5  # update git submodule too
     restart: always
     network_mode: host
     command:
