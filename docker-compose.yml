@@ -4,7 +4,7 @@ version: '2'
 services:
 
   hh-trainer:
-    image: docker.hyperiongray.com/hh-deep-deep:0.0.5  # update below too!
+    image: docker.hyperiongray.com/hh-deep-deep:0.0.6  # update below too!
     restart: always
     network_mode: host
     volumes:
@@ -18,7 +18,7 @@ services:
       - --host-root=${PWD}
 
   hh-crawler:
-    image: docker.hyperiongray.com/hh-deep-deep:0.0.5
+    image: docker.hyperiongray.com/hh-deep-deep:0.0.6
     restart: always
     network_mode: host
     volumes:
