@@ -177,7 +177,7 @@ class Service:
 
     def _debug_save_message(self, message: bytes, kind: str) -> None:
         if self.debug:
-            filename = ('hh-page-clf-{}.json.gz'
+            filename = ('hh-deep-deep-{}.json.gz'
                         .format(hashlib.md5(message).hexdigest()))
             logging.info('Saving {} message to {}'.format(kind, filename))
             with gzip.open(filename, 'wb') as f:
