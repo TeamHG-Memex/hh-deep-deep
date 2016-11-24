@@ -77,7 +77,9 @@ class DDCrawlerProcess(CrawlProcess):
         self.paths.id.write_text(self.id_)
         self.paths.page_clf.write_bytes(self.page_clf_data)
         self.paths.link_clf.write_bytes(self.link_clf_data)
-        self.paths.seeds.write_text('\n'.join(url for url in self.seeds))
+        self.paths.seeds.write_text(
+            '\n'.join(url for url in self.seeds),
+            encoding='utf8')
         cur_dir = Path(__file__).parent  # type: Path
         compose_templates = (
             cur_dir.joinpath('dd-crawler-compose.template.yml').read_text())
