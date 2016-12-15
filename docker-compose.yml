@@ -4,7 +4,7 @@ version: '2'
 services:
 
   hh-trainer:
-    image: docker.hyperiongray.com/hh-deep-deep:0.0.8  # update below too!
+    image: docker.hyperiongray.com/hh-deep-deep:0.1.0  # update below too!
     restart: always
     network_mode: host
     volumes:
@@ -16,9 +16,10 @@ services:
       - --kafka-host=hh-kafka
       - --docker-image=auto-deep-deep-hh
       - --host-root=${PWD}
+      - --debug
 
   hh-crawler:
-    image: docker.hyperiongray.com/hh-deep-deep:0.0.8
+    image: docker.hyperiongray.com/hh-deep-deep:0.1.0
     restart: always
     network_mode: host
     volumes:
@@ -30,6 +31,7 @@ services:
       - --kafka-host=hh-kafka
       - --docker-image=auto-dd-crawler-hh
       - --host-root=${PWD}
+      - --debug
 
   hh-modeler:
     image: docker.hyperiongray.com/hh-page-clf:0.2.0  # update git submodule too
@@ -41,6 +43,7 @@ services:
       - hh-page-clf-service
       - --kafka-host=hh-kafka
       - --lda=/models/lda.joblib
+      - --debug
 
   # Next two are just to build images with up to date hh-page-classifier
 
