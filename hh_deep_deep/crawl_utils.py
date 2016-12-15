@@ -22,6 +22,7 @@ class CrawlPaths:
         self.pid = self.root.joinpath('pid.txt')
         self.page_clf = root.joinpath('page_clf.joblib')
         self.seeds = root.joinpath('seeds.txt')
+        self.models = Path('./models')
 
     def mkdir(self):
         self.root.mkdir(parents=True, exist_ok=True)

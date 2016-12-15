@@ -21,6 +21,7 @@ services:
       - {link_clf}:/dd_crawler/Q.joblib
       - {page_clf}:/dd_crawler/page_clf.joblib
       - {out}:/out
+      - {models}:/models
     entrypoint:
       - /dd_crawler/docker/crawl.sh
       - deepdeep

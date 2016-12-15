@@ -98,7 +98,7 @@ By default, kafka limits message size to 1Mb, which is too small in our case.
 In order to raise the limit, do the following in the kafka container::
 
     docker exec -it kafka /bin/bash
-    cd /opt/kafka_2.11-0.8.2.1/config
+    cd /opt/kafka_*
     echo "message.max.bytes=104857600" >> server.properties
     echo "replica.fetch.max.bytes=104857600" >> server.properties
     echo "fetch.message.max.bytes=104857600" >> server.properties
@@ -140,12 +140,15 @@ Install test requirements::
 
     pip install -r tests/requirements.txt
 
-Start kafka (see above).
+Start kafka (see above in "Local kafka without docker").
 
 Make sure you have ``dd-crawler-hh`` and ``deep-deep-hh`` images
 (set in ``default_docker_image`` property of
 ``DDCrawlerProcess`` and ``DeepDeepProcess``).
-These images can be built using dockerfiles in the ``./docker/`` folder.
+These images can be built using dockerfiles in the ``./docker/`` folder::
+
+    docker build -t dd-crawler-hh docker/ -f docker/dd-crawler.docker
+    docker build -t deep-deep-hh docker/ -f docker/deep-deep.docker
 
 Run tests::
 

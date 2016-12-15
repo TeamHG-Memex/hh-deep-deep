@@ -82,6 +82,7 @@ class DeepDeepProcess(CrawlProcess):
         args = [
             'docker', 'run', '-d',
             '-v', '{}:{}'.format(self.to_host_path(self.paths.root), '/job'),
+            '-v', '{}:{}'.format(self.to_host_path(self.paths.models), '/models'),
             self.docker_image,
             'scrapy', 'crawl', 'relevant',
             '-a', 'seeds_url=/job/{}'.format(self.paths.seeds.name),

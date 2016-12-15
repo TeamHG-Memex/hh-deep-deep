@@ -32,12 +32,15 @@ services:
       - --host-root=${PWD}
 
   hh-modeler:
-    image: docker.hyperiongray.com/hh-page-clf:0.1.7  # update git submodule too
+    image: docker.hyperiongray.com/hh-page-clf:0.2.0  # update git submodule too
     restart: always
     network_mode: host
+    volumes:
+      - ./models:/models
     command:
       - hh-page-clf-service
       - --kafka-host=hh-kafka
+      - --lda=/models/lda.joblib
 
   # Next two are just to build images with up to date hh-page-classifier
 
