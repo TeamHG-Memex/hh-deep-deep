@@ -167,7 +167,7 @@ def get_sample_from_item(item: Dict) -> Dict:
 def get_progress_from_item(item):
     progress = (
         '{pages:,} pages processed from {crawled_domains:,} domains '
-        '({relevant_domains:,} relevant), '
+        '({relevant_domains:,} relevant domains), '
         'average score {score:.1f}, '
         '{enqueued:,} requests enqueued, {domains_open:,} domains open.'
         .format(
