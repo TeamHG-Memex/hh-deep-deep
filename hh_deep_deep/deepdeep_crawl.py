@@ -122,7 +122,7 @@ class DeepDeepProcess(CrawlProcess):
         logging.info('Removed container id {}'.format(self.pid))
         self.pid = None
 
-    def _get_updates(self) -> Tuple[str, List[str]]:
+    def _get_updates(self) -> Tuple[str, List[Dict]]:
         if not self.paths.items.exists():
             return 'Craw is not running yet', []
         n_last = self.get_n_last()

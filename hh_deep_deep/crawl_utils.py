@@ -86,7 +86,7 @@ class CrawlProcess:
     def start(self):
         raise NotImplementedError
 
-    def stop(self):
+    def stop(self, *, verbose):
         raise NotImplementedError
 
     def is_running(self):

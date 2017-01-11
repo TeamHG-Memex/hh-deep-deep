@@ -1,0 +1,7 @@
+{
+  "id": "some crawl id",
+  "page_sample": [
+    {"url": "http://example1.com", "score": 80},
+    {"url": "http://example2.com", "score": 90}
+  ]
+}
