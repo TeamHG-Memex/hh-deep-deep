@@ -43,7 +43,7 @@ services:
       - hh-page-clf-service
       - --kafka-host=hh-kafka
       - --random-pages=/models/random-pages.jl.gz
-      - --lda=/models/lda.joblib
+      - --lda=/models/lda.pkl
       - --debug
 
   # Next two are just to build images with up to date hh-page-classifier
