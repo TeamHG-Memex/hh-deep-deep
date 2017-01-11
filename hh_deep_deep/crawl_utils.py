@@ -31,7 +31,7 @@ class CrawlPaths:
 class CrawlProcess:
     _jobs_root = None
     default_docker_image = None
-    target_sample_rate_pm = 3  # per minute
+    target_sample_rate_pm = 10  # per minute
 
     def __init__(self, *,
                  id_: str,
