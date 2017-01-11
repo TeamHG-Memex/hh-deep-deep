@@ -34,7 +34,7 @@ services:
       - --debug
 
   hh-modeler:
-    image: docker.hyperiongray.com/hh-page-clf:0.2.3  # update git submodule too
+    image: docker.hyperiongray.com/hh-page-clf:0.2.4  # update git submodule too
     restart: always
     network_mode: host
     volumes:
@@ -42,6 +42,7 @@ services:
     command:
       - hh-page-clf-service
       - --kafka-host=hh-kafka
+      - --random-pages=/models/random-pages.jl.gz
       - --lda=/models/lda.joblib
       - --debug
 

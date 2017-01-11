@@ -71,6 +71,9 @@ resolve to ``hh-kafka``. An alternative would be to add::
 
 instead of ``network_mode: host``, but that will not work with local kafka.
 
+Download ``lda.joblib`` and ``random-pages.jl.gz`` from ``s3://darpa-memex/thh/``
+and put them to ``./models`` folder.
+
 Start trainer, modeler and crawler services with::
 
     docker-compose up --build -d
