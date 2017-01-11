@@ -1,5 +1,5 @@
 # FROM deep-deep
-FROM docker.hyperiongray.com/deep-deep:0.0.3
+FROM docker.hyperiongray.com/deep-deep:0.0.4
 
 COPY hh-page-classifier/requirements.txt hh-page-classifier/requirements.txt
 RUN pip install -r ./hh-page-classifier/requirements.txt
