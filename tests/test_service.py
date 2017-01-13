@@ -140,7 +140,7 @@ def check_progress(message):
         assert 'pages processed' in progress
         assert 'domains' in progress
         assert 'relevant' in progress
-        assert 'average score' in progress
+        assert 'Average score' in progress
         return progress
 
 

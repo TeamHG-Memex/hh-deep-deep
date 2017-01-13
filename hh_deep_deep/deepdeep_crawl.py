@@ -135,8 +135,8 @@ class DeepDeepProcess(CrawlProcess):
                 model_progress = ('Last deep-deep model checkpoint {}.'
                                   .format(self.last_model_file.name))
             else:
-                model_progress = 'No model checkpoints yet.'
-            progress = '{} {}'.format(item_progress, model_progress)
+                model_progress = 'Warning: no model checkpoints yet.'
+            progress = '{} {}'.format(model_progress, item_progress)
             return progress, pages
         else:
             return 'Crawl started, no updates yet', []
@@ -166,17 +166,14 @@ def get_sample_from_item(item: Dict) -> Dict:
 
 def get_progress_from_item(item):
     progress = (
+        'Average score {score:.1f}, '
         '{pages:,} pages processed from {crawled_domains:,} domains '
-        '({relevant_domains:,} relevant domains), '
-        'average score {score:.1f}, '
-        '{enqueued:,} requests enqueued, {domains_open:,} domains open.'
+        '({relevant_domains:,} relevant domains).'
         .format(
             pages=item.get('processed', 0),
             crawled_domains=item.get('crawled_domains', 0),
             relevant_domains=item.get('relevant_domains', 0),
             score=(100 * item['return'] / item['t']) if item.get('t') else 0,
-            enqueued=item.get('enqueued', 0),
-            domains_open=item.get('domains_open', 0),
         )
     )
     return progress
