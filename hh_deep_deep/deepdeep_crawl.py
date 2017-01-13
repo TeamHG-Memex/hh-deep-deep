@@ -94,7 +94,7 @@ class DeepDeepProcess(CrawlProcess):
             '-a', 'export_cdr=0',
             '--logfile', '/job/spider.log',
             '-L', 'INFO',
-            '-s', 'CLOSESPIDER_ITEMCOUNT=1000000',
+            '-s', 'CLOSESPIDER_ITEMCOUNT=200000',
         ]
         logging.info('Starting crawl in {}'.format(self.paths.root))
         self.pid = subprocess.check_output(args).decode('utf8').strip()
