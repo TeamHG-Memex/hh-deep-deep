@@ -101,8 +101,8 @@ def _check_progress_pages(progress_consumer, pages_consumer,
         progress_message = next(progress_consumer)
         debug('Got it:', progress_message.value.get('progress'))
         progress = check_progress(progress_message)
-        if not check_trainer or (
-                progress and 'Last deep-deep model checkpoint' in progress):
+        if progress and (not check_trainer or
+                         'Last deep-deep model checkpoint' in progress):
             break
 
 
@@ -140,7 +140,7 @@ def check_progress(message):
         assert 'pages processed' in progress
         assert 'domains' in progress
         assert 'relevant' in progress
-        assert 'Average score' in progress
+        assert 'average score' in progress.lower()
         return progress
 
 
