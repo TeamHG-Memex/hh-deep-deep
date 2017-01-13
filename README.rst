@@ -2,15 +2,26 @@ THH deep-deep integration
 =========================
 
 This is a service that listens to kafka topic and starts/stops deep-deep crawler,
-sends back progress updates, samples of crawled pages and
+sends back progress updates, samples of crawled pages and the link model.
+It also starts the broad crawl using trained link model.
+
+Docker-compose (see "Running with docker" below) also starts the hh-page-classifier
+image that is responsible for training the page score model
+(see https://github.com/TeamHG-Memex/hh-page-classifier).
+
+The same protocol is also documented in the wiki:
+https://hyperiongray.atlassian.net/wiki/pages/viewpage.action?pageId=85753859,
+and there is also a diagram that shows how THH and hh-deep-deep work together
+from the user point of view:
+https://hyperiongray.atlassian.net/wiki/display/THH/THH+Deep-deep+workflow
+and from the system point of view:
+https://hyperiongray.atlassian.net/wiki/pages/viewpage.action?pageId=96796696
+
 
 .. contents::
 
-Protocol
---------
-
-Examples below refer to ``dd-trainer-*`` queues, but the same protocol
-holds for ``dd-crawler-*`` queues.
+Protocol: dd-trainer
+--------------------
 
 Incoming: start the crawl, ``dd-trainer-input``::
 
@@ -54,6 +65,25 @@ Outgoing: send progress update, ``dd-trainer-output-progress``::
       "id": "some crawl id",
       "progress": "Crawled N pages and M domains, average reward is 0.122"
     }
+
+
+Protocol: dd-crawler
+--------------------
+
+Incoming: start the crawl, ``dd-crawler-input``::
+
+    {
+      "id": "some crawl id",
+      "page_model": "b64-encoded page classifier",
+      "link_model": "b64-encoded deep-deep model",
+      "seeds": ["http://example.com", "http://example.com/2"],
+    }
+
+An optional ``page_limit`` key can be added.
+
+Stopping the crawl via ``dd-crawler-input``, and
+``dd-crawler-output-pages``, ``dd-crawler-output-progress`` work exactly the same
+as the corresponding dd-trainer queues.
 
 
 Running with docker
