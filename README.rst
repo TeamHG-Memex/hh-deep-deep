@@ -150,8 +150,8 @@ Make sure you have ``dd-crawler-hh`` and ``deep-deep-hh`` images
 ``DDCrawlerProcess`` and ``DeepDeepProcess``).
 These images can be built using dockerfiles in the ``./docker/`` folder::
 
-    docker build -t dd-crawler-hh docker/ -f docker/dd-crawler.docker
-    docker build -t deep-deep-hh docker/ -f docker/deep-deep.docker
+    docker build -t dd-crawler-hh -f docker/dd-crawler.docker docker/
+    docker build -t deep-deep-hh -f docker/deep-deep.docker docker/
 
 Run tests::
 
