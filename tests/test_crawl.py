@@ -32,13 +32,13 @@ item = {
 def test_get_progress_from_item():
     progress = get_progress_from_item(item)
     assert progress == (
-        '6,109 pages processed from 50 domains (21 relevant), '
+        '6,109 pages processed from 50 domains (21 relevant domains), '
         'average score 56.4, '
         '837,766 requests enqueued, 32,958 domains open.')
 
     progress = get_progress_from_item({})
     assert progress == (
-        '0 pages processed from 0 domains (0 relevant), '
+        '0 pages processed from 0 domains (0 relevant domains), '
         'average score 0.0, '
         '0 requests enqueued, 0 domains open.')
 
