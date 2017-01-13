@@ -164,3 +164,7 @@ and can leave docker containers running if there is some error and
 you are unlucky or press Ctrl+C more than once before crawls are stopped.
 It's better to run it separately during development, adding ``-s`` flag.
 
+To run all other tests, use::
+
+    py.test tests/ -k-slow
+

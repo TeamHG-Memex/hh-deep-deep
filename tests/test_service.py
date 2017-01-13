@@ -4,8 +4,9 @@ import threading
 import pickle
 from typing import Dict, Callable, List
 
-from kafka import KafkaConsumer, KafkaProducer
 from hh_page_clf.model import DefaultModel
+from kafka import KafkaConsumer, KafkaProducer
+import pytest
 
 from hh_deep_deep.service import Service, encode_model_data, decode_model_data
 from hh_deep_deep.utils import configure_logging
@@ -40,6 +41,7 @@ def clear_topics():
             consumer.commit()
 
 
+@pytest.mark.slow
 def test_service():
     # This is a big integration test, better run with "-s"
 
