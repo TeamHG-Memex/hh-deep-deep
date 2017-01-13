@@ -115,6 +115,8 @@ class Service:
         kwargs['page_clf_data'] = decode_model_data(request['page_model'])
         if 'link_model' in request:
             kwargs['link_clf_data'] = decode_model_data(request['link_model'])
+        if 'page_limit' in request:
+            kwargs['page_limit'] = request['page_limit']
         process = self.process_class(id_=id_, **kwargs)
         process.start()
         self.running[id_] = process

@@ -79,6 +79,7 @@ class DeepDeepProcess(CrawlProcess):
         self.paths.page_clf.write_bytes(self.page_clf_data)
         with self.paths.seeds.open('wt', encoding='utf8') as f:
             csv.writer(f).writerows([url] for url in self.seeds)
+        page_limit = self.page_limit or 200000
         args = [
             'docker', 'run', '-d',
             '-v', '{}:{}'.format(self.to_host_path(self.paths.root), '/job'),
@@ -94,7 +95,7 @@ class DeepDeepProcess(CrawlProcess):
             '-a', 'export_cdr=0',
             '--logfile', '/job/spider.log',
             '-L', 'INFO',
-            '-s', 'CLOSESPIDER_ITEMCOUNT=200000',
+            '-s', 'CLOSESPIDER_ITEMCOUNT={}'.format(page_limit),
         ]
         logging.info('Starting crawl in {}'.format(self.paths.root))
         self.pid = subprocess.check_output(args).decode('utf8').strip()

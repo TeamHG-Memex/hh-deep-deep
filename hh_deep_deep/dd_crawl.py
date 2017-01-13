@@ -80,12 +80,17 @@ class DDCrawlerProcess(CrawlProcess):
         self.paths.seeds.write_text(
             '\n'.join(url for url in self.seeds),
             encoding='utf8')
+        n_processes = multiprocessing.cpu_count()
+        if self.max_workers:
+            n_processes = min(self.max_workers, n_processes)
+        page_limit = self.page_limit or 10000000
         cur_dir = Path(__file__).parent  # type: Path
         compose_templates = (
             cur_dir.joinpath('dd-crawler-compose.template.yml').read_text())
         self.paths.root.joinpath('docker-compose.yml').write_text(
             compose_templates.format(
                 docker_image=self.docker_image,
+                page_limit=int(math.ceil(page_limit / n_processes)),
                 **{p: self.to_host_path(getattr(self.paths, p)) for p in [
                     'seeds', 'page_clf', 'link_clf', 'redis_conf', 'out',
                     'models',
@@ -95,9 +100,6 @@ class DDCrawlerProcess(CrawlProcess):
         self.paths.redis_conf.write_text(redis_config)
         logging.info('Starting crawl in {}'.format(self.paths.root))
         self._compose_call('up', '-d')
-        n_processes = multiprocessing.cpu_count()
-        if self.max_workers:
-            n_processes = min(self.max_workers, n_processes)
         self._compose_call('scale', 'crawler={}'.format(n_processes))
         self.pid = self.id_
         self.paths.pid.write_text(self.pid)

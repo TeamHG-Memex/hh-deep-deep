@@ -39,13 +39,15 @@ class CrawlProcess:
                  docker_image: str=None,
                  host_root: str=None,
                  pid: str=None,
-                 jobs_prefix: str=None):
+                 jobs_prefix: str=None,
+                 page_limit: int=None):
         self.pid = pid
         self.id_ = id_
         self.seeds = seeds
         self.docker_image = docker_image or self.default_docker_image
         self.host_root = Path(host_root or '.').absolute()
         self.jobs_prefix = jobs_prefix
+        self.page_limit = page_limit
         self.last_progress = None  # last update sent in self.get_updates
         self.last_page = None  # last page sample sent in self.get_updates
         self.last_page_time = None

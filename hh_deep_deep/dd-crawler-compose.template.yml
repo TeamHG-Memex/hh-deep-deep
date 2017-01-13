@@ -33,6 +33,8 @@ services:
       - page_clf=/dd_crawler/page_clf.joblib
       - -a
       - classifier_input=text_url
+      - -s
+      - CLOSESPIDER_ITEMCOUNT={page_limit}
     dns:
       - 127.0.0.1
     links:

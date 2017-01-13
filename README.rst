@@ -9,6 +9,9 @@ sends back progress updates, samples of crawled pages and
 Protocol
 --------
 
+Examples below refer to ``dd-trainer-*`` queues, but the same protocol
+holds for ``dd-crawler-*`` queues.
+
 Incoming: start the crawl, ``dd-trainer-input``::
 
     {
@@ -16,6 +19,8 @@ Incoming: start the crawl, ``dd-trainer-input``::
       "page_model": "b64-encoded page classifier",
       "seeds": ["http://example.com", "http://example.com/2"]
     }
+
+An optional ``page_limit`` key can be added.
 
 Incoming: stop the crawl, ``dd-trainer-input``::
 
@@ -126,7 +131,7 @@ Local kafka without docker
 
 Start local kafka with::
 
-    docker run -d --name kafka \
+    docker run -it --rm --name kafka \
         -p 2181:2181 -p 9092:9092 \
         --env ADVERTISED_HOST=127.0.0.1 \
         --env ADVERTISED_PORT=9092 \
