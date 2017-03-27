@@ -164,5 +164,16 @@ class DDCrawlerProcess(CrawlProcess):
 
 def get_last_csv_items(csv_path: Path, n_last: int, exp_len: int) -> List[Dict]:
     last_lines = get_last_lines(csv_path, n_last + 1)
-    last_items = [it for it in csv.reader(last_lines) if len(it) == exp_len]
+    last_items = []
+    for line in last_lines:
+        try:
+            it = next(csv.reader([line]))
+        except StopIteration:
+            pass
+        except csv.Error:
+            logging.warning('Error parsing csv, line starts with "{}"'
+                            .format(line[:500]))
+        else:
+            if len(it) == exp_len:
+                last_items.append(it)
     return last_items[-n_last:]
