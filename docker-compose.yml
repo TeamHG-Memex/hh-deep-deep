@@ -34,7 +34,7 @@ services:
       - --debug
 
   hh-modeler:
-    image: docker.hyperiongray.com/hh-page-clf:0.2.5  # update git submodule too
+    image: docker.hyperiongray.com/hh-page-clf:0.3.0  # update git submodule too
     restart: always
     network_mode: host
     volumes:
