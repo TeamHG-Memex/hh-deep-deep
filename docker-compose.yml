@@ -32,7 +32,7 @@ services:
       - --host-root=${PWD}
 
   hh-modeler:
-    image: hyperiongray/hh-page-clf:0.3.0  # update git submodule too
+    image: hyperiongray/hh-page-clf:0.3.1  # update git submodule too
     restart: always
     network_mode: host
     volumes:
