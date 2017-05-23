@@ -44,6 +44,7 @@ class Service:
             '{}dd-{}-input'.format(self.queue_prefix, self.queue_kind))
         self.consumer = KafkaConsumer(
             self.input_topic,
+            group_id='{}-group'.format(self.input_topic),
             consumer_timeout_ms=200,
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
