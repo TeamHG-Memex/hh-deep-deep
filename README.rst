@@ -9,14 +9,6 @@ Docker-compose (see "Running with docker" below) also starts the hh-page-classif
 image that is responsible for training the page score model
 (see https://github.com/TeamHG-Memex/hh-page-classifier).
 
-The same protocol is also documented in the wiki:
-https://hyperiongray.atlassian.net/wiki/pages/viewpage.action?pageId=85753859,
-and there is also a diagram that shows how THH and hh-deep-deep work together
-from the user point of view:
-https://hyperiongray.atlassian.net/wiki/display/THH/THH+Deep-deep+workflow
-and from the system point of view:
-https://hyperiongray.atlassian.net/wiki/pages/viewpage.action?pageId=96796696
-
 
 .. contents::
 
