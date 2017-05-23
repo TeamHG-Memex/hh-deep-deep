@@ -4,7 +4,7 @@ version: '2'
 services:
 
   hh-trainer:
-    image: docker.hyperiongray.com/hh-deep-deep:0.1.3  # update below too!
+    image: hyperiongray/hh-deep-deep:0.1.3  # update below too!
     restart: always
     network_mode: host
     volumes:
@@ -14,12 +14,11 @@ services:
       - hh-deep-deep-service
       - trainer
       - --kafka-host=hh-kafka
-      - --docker-image=auto-deep-deep-hh
+      - --docker-image=hyperiongray/deep-deep-hh:0.1.0
       - --host-root=${PWD}
-      - --debug
 
   hh-crawler:
-    image: docker.hyperiongray.com/hh-deep-deep:0.1.3
+    image: hyperiongray/hh-deep-deep:0.1.3
     restart: always
     network_mode: host
     volumes:
@@ -29,12 +28,11 @@ services:
       - hh-deep-deep-service
       - crawler
       - --kafka-host=hh-kafka
-      - --docker-image=auto-dd-crawler-hh
+      - --docker-image=hyperiongray/dd-crawler-hh:0.1.0
       - --host-root=${PWD}
-      - --debug
 
   hh-modeler:
-    image: docker.hyperiongray.com/hh-page-clf:0.3.0  # update git submodule too
+    image: hyperiongray/hh-page-clf:0.3.0  # update git submodule too
     restart: always
     network_mode: host
     volumes:
@@ -44,24 +42,3 @@ services:
       - --kafka-host=hh-kafka
       - --random-pages=/models/random-pages.jl.gz
       - --lda=/models/lda.pkl
-      - --debug
-
-  # Next two are just to build images with up to date hh-page-classifier
-
-  deep-deep:
-    image: auto-deep-deep-hh
-    build:
-      context: ./docker/
-      dockerfile: deep-deep.docker
-    command:
-      - echo
-      - "image for deep-deep built"
-
-  dd-crawler:
-    image: auto-dd-crawler-hh
-    build:
-      context: ./docker/
-      dockerfile: dd-crawler.docker
-    entrypoint:
-      - echo
-      - "image for dd-crawler built"

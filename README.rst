@@ -90,13 +90,15 @@ Add yourself to docker group (requires re-login)::
 
     sudo usermod -aG docker <username>
 
-Clone the repo and init submodules::
+For development, clone the repo and init submodules::
 
     git clone git@github.com:TeamHG-Memex/hh-deep-deep.git
     cd hh-deep-deep
     git submodule update --init
 
-You **must** add the IP at which kafka is running to ``/etc/hosts``, making it
+For production, just get ``docker-compose.yml`` from this repo.
+
+Next you **must** add the IP at which kafka is running to ``/etc/hosts``, making it
 resolve to ``hh-kafka``. An alternative would be to add::
 
     extra_hosts:
@@ -112,11 +114,15 @@ and put them to ``./models`` folder::
     wget https://s3-us-west-2.amazonaws.com/darpa-memex/thh/lda.pkl
     cd ..
 
-Start trainer, modeler and crawler services with::
+For development, start trainer, modeler and crawler services with::
 
-    docker-compose up --build -d
+    docker-compose up -f docker-compose.dev.yml --build
 
-In order to update existing installation, do::
+For production, start all services with::
+
+    docker-compose up -d
+
+In order to update existing development installation, do::
 
     git pull
     git submodule update --init
