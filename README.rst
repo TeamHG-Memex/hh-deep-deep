@@ -90,6 +90,12 @@ Add yourself to docker group (requires re-login)::
 
     sudo usermod -aG docker <username>
 
+Clone the repo and init submodules::
+
+    git clone git@github.com:TeamHG-Memex/hh-deep-deep.git
+    cd hh-deep-deep
+    git submodule update --init
+
 You **must** add the IP at which kafka is running to ``/etc/hosts``, making it
 resolve to ``hh-kafka``. An alternative would be to add::
 
@@ -99,7 +105,12 @@ resolve to ``hh-kafka``. An alternative would be to add::
 instead of ``network_mode: host``, but that will not work with local kafka.
 
 Download ``lda.pkl`` and ``random-pages.jl.gz`` from ``s3://darpa-memex/thh/``
-and put them to ``./models`` folder.
+and put them to ``./models`` folder::
+
+    cd models
+    wget https://s3-us-west-2.amazonaws.com/darpa-memex/thh/random-pages.jl.gz
+    wget https://s3-us-west-2.amazonaws.com/darpa-memex/thh/lda.pkl
+    cd ..
 
 Start trainer, modeler and crawler services with::
 
