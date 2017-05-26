@@ -24,8 +24,6 @@ class ATestService(Service):
 
 
 def clear_topics():
-    # TODO - do this without creating services and with one consumer
-    # to save time
     for service in [ATestService('trainer'), ATestService('crawler')]:
         topics = [
             service.input_topic,
@@ -35,7 +33,8 @@ def clear_topics():
         if service.queue_kind == 'trainer':
             topics.append(service.output_topic('model'))
         for topic in topics:
-            consumer = KafkaConsumer(topic, consumer_timeout_ms=10)
+            consumer = KafkaConsumer(topic, consumer_timeout_ms=10,
+                                     group_id='{}-group'.format(topic))
             for _ in consumer:
                 pass
             consumer.commit()
