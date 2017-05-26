@@ -1,5 +1,6 @@
 import argparse
 import base64
+import concurrent.futures
 import gzip
 import hashlib
 import logging
@@ -68,33 +69,34 @@ class Service:
 
     def run(self) -> None:
         counter = 0
-        while True:
-            counter += 1
-            for message in self.consumer:
-                self._debug_save_message(message.value, 'incoming')
-                try:
-                    value = json.loads(message.value.decode('utf8'))
-                except Exception as e:
-                    logging.error('Error decoding message: {}'
-                                  .format(repr(message.value)),
-                                  exc_info=e)
-                    continue
-                if value == {'from-tests': 'stop'}:
-                    logging.info('Got message to stop (from tests)')
-                    return
-                elif all(value.get(key) is not None
-                         for key in self.required_keys):
-                    self.start_crawl(value)
-                elif 'id' in value and value.get('stop'):
-                    self.stop_crawl(value)
-                else:
-                    logging.error('Dropping a message in unknown format: {}'
-                                  .format(value.keys() if hasattr(value, 'keys')
-                                          else type(value)))
-            if counter % self.check_updates_every == 0:
-                self.send_updates()
-            self.producer.flush()
-            self.consumer.commit()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            while True:
+                counter += 1
+                for message in self.consumer:
+                    self._debug_save_message(message.value, 'incoming')
+                    try:
+                        value = json.loads(message.value.decode('utf8'))
+                    except Exception as e:
+                        logging.error('Error decoding message: {}'
+                                      .format(repr(message.value)),
+                                      exc_info=e)
+                        continue
+                    if value == {'from-tests': 'stop'}:
+                        logging.info('Got message to stop (from tests)')
+                        return
+                    elif all(value.get(key) is not None
+                             for key in self.required_keys):
+                        executor.submit(self.start_crawl, value)
+                    elif 'id' in value and value.get('stop'):
+                        executor.submit(self.stop_crawl, value)
+                    else:
+                        logging.error('Dropping a message in unknown format: {}'
+                                      .format(value.keys() if hasattr(value, 'keys')
+                                              else type(value)))
+                if counter % self.check_updates_every == 0:
+                    self.send_updates()
+                self.producer.flush()
+                self.consumer.commit()
 
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
