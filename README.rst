@@ -116,7 +116,7 @@ and put them to ``./models`` folder::
 
 For development, start trainer, modeler and crawler services with::
 
-    docker-compose up -f docker-compose.dev.yml --build
+    docker-compose -f docker-compose.dev.yml up --build
 
 For production, start all services with::
 
