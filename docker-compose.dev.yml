@@ -6,68 +6,33 @@ services:
   hh-trainer:
     image: hh-deep-deep
     build: .
-    restart: always
-    network_mode: bridge
-    external_links:
-        - "${KAFKA_CONTAINER}:hh-kafka"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./deep-deep-jobs:/opt/hh-deep-deep/deep-deep-jobs
     command:
       - hh-deep-deep-service
       - trainer
       - --kafka-host=hh-kafka
-      - --docker-image=auto-deep-deep-hh
+      - --docker-image=auto-deep-deep-hh  # dev image
       - --host-root=${PWD}
-      - --debug
+      - --debug                           # debug
 
   hh-crawler:
     image: hh-deep-deep
     build: .
-    restart: always
-    network_mode: bridge
-    external_links:
-        - "${KAFKA_CONTAINER}:hh-kafka"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./dd-jobs:/opt/hh-deep-deep/dd-jobs
     command:
       - hh-deep-deep-service
       - crawler
       - --kafka-host=hh-kafka
-      - --docker-image=auto-dd-crawler-hh
+      - --docker-image=auto-dd-crawler-hh  # dev image
       - --host-root=${PWD}
-      - --debug
+      - --debug                            # debug
 
   hh-modeler:
     image: hh-page-clf
-    restart: always
-    network_mode: bridge
-    external_links:
-        - "${KAFKA_CONTAINER}:hh-kafka"
-    volumes:
-      - ./models:/models
     command:
       - hh-page-clf-service
       - --kafka-host=hh-kafka
       - --random-pages=/models/random-pages.jl.gz
       - --lda=/models/lda.pkl
-      - --debug
-
-  tor-proxy:
-    image: hyperiongray/tor-proxy:0.1.1
-    network_mode: bridge
-    expose:
-      - "9050"
-
-  proxy:
-    image: jess/privoxy
-    network_mode: bridge
-    container_name: hh-deep-deep-tor-proxy
-    expose:
-      - "8118"
-    links:
-      - "tor-proxy:torproxy"
+      - --debug  # debug
 
   # Next two are just to build images with up to date hh-page-classifier
 

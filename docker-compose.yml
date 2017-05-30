@@ -6,7 +6,9 @@ services:
   hh-trainer:
     image: hyperiongray/hh-deep-deep:0.1.4  # update below too!
     restart: always
-    network_mode: host
+    network_mode: bridge
+    external_links:
+        - "${KAFKA_CONTAINER}:hh-kafka"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./deep-deep-jobs:/opt/hh-deep-deep/deep-deep-jobs
@@ -20,7 +22,9 @@ services:
   hh-crawler:
     image: hyperiongray/hh-deep-deep:0.1.4
     restart: always
-    network_mode: host
+    network_mode: bridge
+    external_links:
+        - "${KAFKA_CONTAINER}:hh-kafka"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./dd-jobs:/opt/hh-deep-deep/dd-jobs
@@ -34,7 +38,9 @@ services:
   hh-modeler:
     image: hyperiongray/hh-page-clf:0.3.1  # update git submodule too
     restart: always
-    network_mode: host
+    network_mode: bridge
+    external_links:
+        - "${KAFKA_CONTAINER}:hh-kafka"
     volumes:
       - ./models:/models
     command:
@@ -45,8 +51,15 @@ services:
 
   tor-proxy:
     image: hyperiongray/tor-proxy:0.1.1
-    network_mode: host
+    network_mode: bridge
+    expose:
+      - "9050"
 
-  tor-privoxy:
+  proxy:
     image: jess/privoxy
-    network_mode: host
+    network_mode: bridge
+    container_name: hh-deep-deep-tor-proxy
+    expose:
+      - "8118"
+    links:
+      - "tor-proxy:torproxy"

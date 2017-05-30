@@ -81,10 +81,13 @@ as the corresponding dd-trainer queues.
 Running with docker
 -------------------
 
+Note that the docker client API version on host must be
+not older than server docker API version in Ubuntu 16.04
+(currently 1.24, you can check it with ``docker version``).
+
 Install docker and docker-compose (assuming Ubuntu 16.04)::
 
-    sudo apt install -y docker.io python-pip
-    sudo -H pip install docker-compose
+    sudo apt install -y docker.io docker-compose
 
 Add yourself to docker group (requires re-login)::
 
@@ -96,15 +99,8 @@ For development, clone the repo and init submodules::
     cd hh-deep-deep
     git submodule update --init
 
-For production, just get ``docker-compose.yml`` from this repo.
-
-Next you **must** add the IP at which kafka is running to ``/etc/hosts``, making it
-resolve to ``hh-kafka``. An alternative would be to add::
-
-    extra_hosts:
-        - "hh-kafka:${KAFKA_HOST}"
-
-instead of ``network_mode: host``, but that will not work with local kafka.
+For production, just get ``docker-compose.yml`` and ``docker-compose.kafka-host.yml``
+from this repo.
 
 Download ``lda.pkl`` and ``random-pages.jl.gz`` from ``s3://darpa-memex/thh/``
 and put them to ``./models`` folder::
@@ -114,13 +110,29 @@ and put them to ``./models`` folder::
     wget https://s3-us-west-2.amazonaws.com/darpa-memex/thh/lda.pkl
     cd ..
 
-For development, start trainer, modeler and crawler services with::
 
-    docker-compose -f docker-compose.dev.yml up --build
+If you are running kafka docker on the same host, export it's container name::
 
-For production, start all services with::
+    export KAFKA_CONTAINER=kafka-2.11-0.10.1.1-2.4
+
+If you are running kafka docker on a different host, export the host name::
+
+    export KAFKA_HOST=1.2.3.4
+
+For development (local kafka assumed),
+start trainer, modeler and crawler services with::
+
+    docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+For production with local kafka, assuming ``KAFKA_CONTAINER`` set (see above),
+ start all services with::
 
     docker-compose up -d
+
+For production with external kafka, assuming ``KAFKA_HOST`` set (see above),
+start all services with::
+
+    docker-compose -f docker-compose.yml -f docker-compose.kafka-host.yml up -d
 
 In order to update existing development installation, do::
 
