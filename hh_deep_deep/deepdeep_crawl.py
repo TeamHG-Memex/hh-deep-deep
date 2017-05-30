@@ -80,10 +80,13 @@ class DeepDeepProcess(CrawlProcess):
         with self.paths.seeds.open('wt', encoding='utf8') as f:
             csv.writer(f).writerows([url] for url in self.seeds)
         page_limit = self.page_limit or 200000
+        proxy = 'http://proxy:8118'
         args = [
             'docker', 'run', '-d',
             '-v', '{}:{}'.format(self.to_host_path(self.paths.root), '/job'),
             '-v', '{}:{}'.format(self.to_host_path(self.paths.models), '/models'),
+            '--network', 'bridge',
+            '--link', 'hh-deep-deep-tor-proxy:proxy',
             self.docker_image,
             'scrapy', 'crawl', 'relevant',
             '-a', 'seeds_url=/job/{}'.format(self.paths.seeds.name),
@@ -96,6 +99,8 @@ class DeepDeepProcess(CrawlProcess):
             '--logfile', '/job/spider.log',
             '-L', 'INFO',
             '-s', 'CLOSESPIDER_ITEMCOUNT={}'.format(page_limit),
+            '-s', 'HTTP_PROXY={}'.format(proxy),
+            '-s', 'HTTPS_PROXY={}'.format(proxy),
         ]
         logging.info('Starting crawl in {}'.format(self.paths.root))
         self.pid = subprocess.check_output(args).decode('utf8').strip()
