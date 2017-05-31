@@ -56,7 +56,7 @@ services:
       - "9050"
 
   proxy:
-    image: jess/privoxy
+    image: hyperiongray/privoxy:0.1.0
     network_mode: bridge
     container_name: hh-deep-deep-tor-proxy
     expose:
