@@ -18,6 +18,7 @@ services:
       - --kafka-host=hh-kafka
       - --docker-image=hyperiongray/deep-deep-hh:0.1.1
       - --host-root=${PWD}
+      - --proxy-container=hh-deep-deep-tor-proxy
 
   hh-crawler:
     image: hyperiongray/hh-deep-deep:0.1.4

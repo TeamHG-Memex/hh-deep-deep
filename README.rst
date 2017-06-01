@@ -140,16 +140,27 @@ In order to update existing development installation, do::
     git submodule update --init
 
 
-Local Kafka with Docker
-+++++++++++++++++++++++
+Usage without Docker
+--------------------
 
-If you want to use a local kafka, just add ``127.0.0.1   hh-kafka`` to ``/etc/hosts``,
-and star kafka with::
+Run the service passing kafka host as ``--kafka-host``
+(or leave it blank if testing locally)::
+
+    hh-deep-deep-service [trainer|crawler] --kafka-host hh-kafka
+
+
+Testing
+-------
+
+Install test requirements::
+
+    pip install -r tests/requirements.txt
+
+Start local kafka with::
 
     docker run -it --rm --name kafka \
-        --add-host hh-kafka:127.0.0.1 \
         -p 2181:2181 -p 9092:9092 \
-        --env ADVERTISED_HOST=hh-kafka \
+        --env ADVERTISED_HOST=127.0.0.1 \
         --env ADVERTISED_PORT=9092 \
         spotify/kafka
 
@@ -165,41 +176,7 @@ In order to raise the limit, do the following in the kafka container::
     kill -15 `ps aux | grep kafka.Kafka | grep -v grep | awk '{print $2}'`
     exit
 
-For some reason, pushing messages does not work after stop/start.
-
-
-Usage without Docker
---------------------
-
-Run the service passing kafka host as ``--kafka-host``
-(or leave it blank if testing locally)::
-
-    hh-deep-deep-service [trainer|crawler] --kafka-host hh-kafka
-
-
-Local kafka without docker
-++++++++++++++++++++++++++
-
-Start local kafka with::
-
-    docker run -it --rm --name kafka \
-        -p 2181:2181 -p 9092:9092 \
-        --env ADVERTISED_HOST=127.0.0.1 \
-        --env ADVERTISED_PORT=9092 \
-        spotify/kafka
-
-Also tweak it's config in the same way as described above, at the end of
-"Running with docker" section.
-
-
-Testing
--------
-
-Install test requirements::
-
-    pip install -r tests/requirements.txt
-
-Start kafka (see above in "Local kafka without docker").
+For some reason, pushing messages does not work after container stop/start.
 
 Make sure you have ``dd-crawler-hh`` and ``deep-deep-hh`` images
 (set in ``default_docker_image`` property of

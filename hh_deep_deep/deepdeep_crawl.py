@@ -24,11 +24,13 @@ class DeepDeepProcess(CrawlProcess):
                  page_clf_data: bytes,
                  root: Path=None,
                  checkpoint_interval: int=1000,
+                 proxy_container: str=None,
                  **kwargs):
         super().__init__(**kwargs)
         self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.checkpoint_interval = checkpoint_interval
+        self.proxy_container = proxy_container
         # last model sent in self.get_new_model
         self.last_model_file = None  # type: Path
 
@@ -80,14 +82,17 @@ class DeepDeepProcess(CrawlProcess):
         with self.paths.seeds.open('wt', encoding='utf8') as f:
             csv.writer(f).writerows([url] for url in self.seeds)
         page_limit = self.page_limit or 200000
-        proxy = 'http://proxy:8118'
-        args = [
+        docker_args = [
             'docker', 'run', '-d',
             '-v', '{}:{}'.format(self.to_host_path(self.paths.root), '/job'),
             '-v', '{}:{}'.format(self.to_host_path(self.paths.models), '/models'),
             '--network', 'bridge',
-            '--link', 'hh-deep-deep-tor-proxy:proxy',
-            self.docker_image,
+        ]
+        proxy = 'http://proxy:8118'
+        if self.proxy_container:
+            docker_args.extend(['--link', '{}:proxy'.format(self.proxy_container)])
+        docker_args.append(self.docker_image)
+        args = docker_args + [
             'scrapy', 'crawl', 'relevant',
             '-a', 'seeds_url=/job/{}'.format(self.paths.seeds.name),
             '-a', 'checkpoint_path=/job',
@@ -99,9 +104,12 @@ class DeepDeepProcess(CrawlProcess):
             '--logfile', '/job/spider.log',
             '-L', 'INFO',
             '-s', 'CLOSESPIDER_ITEMCOUNT={}'.format(page_limit),
-            '-s', 'HTTP_PROXY={}'.format(proxy),
-            '-s', 'HTTPS_PROXY={}'.format(proxy),
         ]
+        if self.proxy_container:
+            args.extend([
+                '-s', 'HTTP_PROXY={}'.format(proxy),
+                '-s', 'HTTPS_PROXY={}'.format(proxy),
+            ])
         logging.info('Starting crawl in {}'.format(self.paths.root))
         self.pid = subprocess.check_output(args).decode('utf8').strip()
         logging.info('Crawl started, container id {}'.format(self.pid))

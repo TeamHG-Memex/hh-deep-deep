@@ -12,6 +12,7 @@ services:
       - --kafka-host=hh-kafka
       - --docker-image=auto-deep-deep-hh  # dev image
       - --host-root=${PWD}
+      - --proxy-container=hh-deep-deep-tor-proxy
       - --debug                           # debug
 
   hh-crawler:
