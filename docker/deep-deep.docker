@@ -1,5 +1,6 @@
 # FROM deep-deep
-FROM hyperiongray/deep-deep:0.1.0
+FROM hyperiongray/deep-deep:0.1.1
+# ^^ update hyperiongray/deep-deep-hh as well (image and docker-compose.yml)
 
 COPY hh-page-classifier/requirements.txt hh-page-classifier/requirements.txt
 RUN pip install -r ./hh-page-classifier/requirements.txt

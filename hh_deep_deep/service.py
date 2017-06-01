@@ -208,12 +208,15 @@ def main():
     arg('--host-root', help='Pass host ${PWD} if running in a docker container')
     arg('--max-workers', type=int, help='Only for "crawler"')
     arg('--debug', action='store_true')
+    arg('--proxy-container', help='proxy container name')
     args = parser.parse_args()
 
     configure_logging()
     cp_kwargs = {}
     if args.max_workers:
         cp_kwargs['max_workers'] = args.max_workers
+    if args.proxy_container:
+        cp_kwargs['proxy_container'] = args.proxy_container
     service = Service(
         args.kind, kafka_host=args.kafka_host, docker_image=args.docker_image,
         host_root=args.host_root, debug=args.debug,

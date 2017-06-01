@@ -81,6 +81,11 @@ as the corresponding dd-trainer queues.
 Running with docker
 -------------------
 
+Note that the docker client API version on host must be
+not older than server docker API version in Ubuntu 16.04
+(currently 1.24, you can check it with ``docker version``).
+Minimal ``docker-compose`` version is 1.10.
+
 Install docker and docker-compose (assuming Ubuntu 16.04)::
 
     sudo apt install -y docker.io python-pip
@@ -96,15 +101,8 @@ For development, clone the repo and init submodules::
     cd hh-deep-deep
     git submodule update --init
 
-For production, just get ``docker-compose.yml`` from this repo.
-
-Next you **must** add the IP at which kafka is running to ``/etc/hosts``, making it
-resolve to ``hh-kafka``. An alternative would be to add::
-
-    extra_hosts:
-        - "hh-kafka:${KAFKA_HOST}"
-
-instead of ``network_mode: host``, but that will not work with local kafka.
+For production, just get ``docker-compose.yml`` and ``docker-compose.kafka-host.yml``
+from this repo.
 
 Download ``lda.pkl`` and ``random-pages.jl.gz`` from ``s3://darpa-memex/thh/``
 and put them to ``./models`` folder::
@@ -114,13 +112,33 @@ and put them to ``./models`` folder::
     wget https://s3-us-west-2.amazonaws.com/darpa-memex/thh/lda.pkl
     cd ..
 
-For development, start trainer, modeler and crawler services with::
 
-    docker-compose -f docker-compose.dev.yml up --build
+If you are running kafka docker on the same host, include it in the docker-compose
+config via several ``-f`` options. It should be exposed as ``hh-kafka`` and have
+a health-check defined. An example is in ``docker-compose.kafka.yml``::
 
-For production, start all services with::
+    docker-compose \
+        -f docker-compose.yml \
+        -f docker-compose.kafka-example.yml \
+        up -d
 
-    docker-compose up -d
+If you are running kafka docker on a different host, export the host name::
+
+    export KAFKA_HOST=1.2.3.4
+
+and start all services with::
+
+    docker-compose -f docker-compose.yml -f docker-compose.kafka-host.yml up -d
+
+For development, in order to include locally built images,
+include ``docker-compose.dev.yml`` file as well, and pass ``--build``,
+for example::
+
+    docker-compose \
+        -f docker-compose.yml \
+        -f docker-compose.kafka-example.yml \
+        -f docker-compose.dev.yml \
+        up --build
 
 In order to update existing development installation, do::
 
@@ -128,16 +146,27 @@ In order to update existing development installation, do::
     git submodule update --init
 
 
-Local Kafka with Docker
-+++++++++++++++++++++++
+Usage without Docker
+--------------------
 
-If you want to use a local kafka, just add ``127.0.0.1   hh-kafka`` to ``/etc/hosts``,
-and star kafka with::
+Run the service passing kafka host as ``--kafka-host``
+(or leave it blank if testing locally)::
+
+    hh-deep-deep-service [trainer|crawler] --kafka-host hh-kafka
+
+
+Testing
+-------
+
+Install test requirements::
+
+    pip install -r tests/requirements.txt
+
+Start local kafka with::
 
     docker run -it --rm --name kafka \
-        --add-host hh-kafka:127.0.0.1 \
         -p 2181:2181 -p 9092:9092 \
-        --env ADVERTISED_HOST=hh-kafka \
+        --env ADVERTISED_HOST=127.0.0.1 \
         --env ADVERTISED_PORT=9092 \
         spotify/kafka
 
@@ -153,41 +182,7 @@ In order to raise the limit, do the following in the kafka container::
     kill -15 `ps aux | grep kafka.Kafka | grep -v grep | awk '{print $2}'`
     exit
 
-For some reason, pushing messages does not work after stop/start.
-
-
-Usage without Docker
---------------------
-
-Run the service passing kafka host as ``--kafka-host``
-(or leave it blank if testing locally)::
-
-    hh-deep-deep-service [trainer|crawler] --kafka-host hh-kafka
-
-
-Local kafka without docker
-++++++++++++++++++++++++++
-
-Start local kafka with::
-
-    docker run -it --rm --name kafka \
-        -p 2181:2181 -p 9092:9092 \
-        --env ADVERTISED_HOST=127.0.0.1 \
-        --env ADVERTISED_PORT=9092 \
-        spotify/kafka
-
-Also tweak it's config in the same way as described above, at the end of
-"Running with docker" section.
-
-
-Testing
--------
-
-Install test requirements::
-
-    pip install -r tests/requirements.txt
-
-Start kafka (see above in "Local kafka without docker").
+For some reason, pushing messages does not work after container stop/start.
 
 Make sure you have ``dd-crawler-hh`` and ``deep-deep-hh`` images
 (set in ``default_docker_image`` property of

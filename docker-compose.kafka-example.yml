@@ -1,0 +1,11 @@
+version: '2.1'
+
+services:
+
+  hh-kafka:
+    image: hyperiongray/kafka-2.11-0.10.1.1:2.4
+    expose:
+      - "9092"
+      - "2181"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "2181"]
