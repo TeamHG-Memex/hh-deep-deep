@@ -1,14 +1,14 @@
-version: '2'
+version: '2.1'
 
 
 services:
 
   hh-trainer:
-    image: hyperiongray/hh-deep-deep:0.1.4  # update below too!
+    image: hyperiongray/hh-deep-deep:0.1.5  # update below too!
     restart: always
-    network_mode: bridge
-    external_links:
-        - "${KAFKA_CONTAINER}:hh-kafka"
+    depends_on:
+      hh-kafka:
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./deep-deep-jobs:/opt/hh-deep-deep/deep-deep-jobs
@@ -21,11 +21,11 @@ services:
       - --proxy-container=hh-deep-deep-tor-proxy
 
   hh-crawler:
-    image: hyperiongray/hh-deep-deep:0.1.4
+    image: hyperiongray/hh-deep-deep:0.1.5
     restart: always
-    network_mode: bridge
-    external_links:
-        - "${KAFKA_CONTAINER}:hh-kafka"
+    depends_on:
+      hh-kafka:
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./dd-jobs:/opt/hh-deep-deep/dd-jobs
@@ -39,9 +39,9 @@ services:
   hh-modeler:
     image: hyperiongray/hh-page-clf:0.3.1  # update git submodule too
     restart: always
-    network_mode: bridge
-    external_links:
-        - "${KAFKA_CONTAINER}:hh-kafka"
+    depends_on:
+      hh-kafka:
+        condition: service_healthy
     volumes:
       - ./models:/models
     command:

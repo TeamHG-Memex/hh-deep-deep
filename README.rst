@@ -84,10 +84,12 @@ Running with docker
 Note that the docker client API version on host must be
 not older than server docker API version in Ubuntu 16.04
 (currently 1.24, you can check it with ``docker version``).
+Minimal ``docker-compose`` version is 1.10.
 
 Install docker and docker-compose (assuming Ubuntu 16.04)::
 
-    sudo apt install -y docker.io docker-compose
+    sudo apt install -y docker.io python-pip
+    sudo -H pip install docker-compose
 
 Add yourself to docker group (requires re-login)::
 
@@ -111,28 +113,32 @@ and put them to ``./models`` folder::
     cd ..
 
 
-If you are running kafka docker on the same host, export it's container name::
+If you are running kafka docker on the same host, include it in the docker-compose
+config via several ``-f`` options. It should be exposed as ``hh-kafka`` and have
+a health-check defined. An example is in ``docker-compose.kafka.yml``::
 
-    export KAFKA_CONTAINER=kafka-2.11-0.10.1.1-2.4
+    docker-compose \
+        -f docker-compose.yml \
+        -f docker-compose.kafka-example.yml \
+        up -d
 
 If you are running kafka docker on a different host, export the host name::
 
     export KAFKA_HOST=1.2.3.4
 
-For development (local kafka assumed),
-start trainer, modeler and crawler services with::
-
-    docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-
-For production with local kafka, assuming ``KAFKA_CONTAINER`` set (see above),
- start all services with::
-
-    docker-compose up -d
-
-For production with external kafka, assuming ``KAFKA_HOST`` set (see above),
-start all services with::
+and start all services with::
 
     docker-compose -f docker-compose.yml -f docker-compose.kafka-host.yml up -d
+
+For development, in order to include locally built images,
+include ``docker-compose.dev.yml`` file as well, and pass ``--build``,
+for example::
+
+    docker-compose \
+        -f docker-compose.yml \
+        -f docker-compose.kafka-example.yml \
+        -f docker-compose.dev.yml \
+        up --build
 
 In order to update existing development installation, do::
 
