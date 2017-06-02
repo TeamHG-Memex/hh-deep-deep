@@ -1,5 +1,5 @@
 # FROM dd-crawler
-FROM hyperiongray/dd-crawler:0.0.5
+FROM hyperiongray/dd-crawler:0.1.0
 
 COPY hh-page-classifier/requirements.txt hh-page-classifier/requirements.txt
 RUN pip install -r ./hh-page-classifier/requirements.txt

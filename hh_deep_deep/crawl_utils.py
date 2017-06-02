@@ -40,7 +40,8 @@ class CrawlProcess:
                  host_root: str=None,
                  pid: str=None,
                  jobs_prefix: str=None,
-                 page_limit: int=None):
+                 page_limit: int=None,
+                 proxy_container: str=None):
         self.pid = pid
         self.id_ = id_
         self.seeds = seeds
@@ -48,6 +49,7 @@ class CrawlProcess:
         self.host_root = Path(host_root or '.').absolute()
         self.jobs_prefix = jobs_prefix
         self.page_limit = page_limit
+        self.proxy_container = proxy_container
         self.last_progress = None  # last update sent in self.get_updates
         self.last_page = None  # last page sample sent in self.get_updates
         self.last_page_time = None
