@@ -8,4 +8,4 @@ services:
       - "9092"
       - "2181"
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "2181"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 2181 && nc -z `hostname` 9092"]
