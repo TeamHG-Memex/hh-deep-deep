@@ -24,7 +24,9 @@ services:
       - --kafka-host=hh-kafka
       - --docker-image=auto-dd-crawler-hh  # dev image
       - --host-root=${PWD}
+      - --proxy-container=hh-deep-deep-tor-proxy
       - --debug                            # debug
+      - --max-workers=2                    # limit to only 2 workers
 
   hh-modeler:
     image: hh-page-clf

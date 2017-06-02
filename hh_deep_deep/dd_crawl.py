@@ -64,7 +64,7 @@ class DDCrawlerProcess(CrawlProcess):
         running_containers = (
             subprocess.check_output(['docker-compose', 'ps', '-q'], cwd=str(root))
             .decode('utf8').strip().split('\n'))
-        # Only container is not normal,
+        # Only one container is not normal,
         # should be at least redis and one crawler.
         return len(running_containers) >= 2
 
@@ -91,6 +91,9 @@ class DDCrawlerProcess(CrawlProcess):
             compose_templates.format(
                 docker_image=self.docker_image,
                 page_limit=int(math.ceil(page_limit / n_processes)),
+                external_links=('["{}:proxy"]'.format(self.proxy_container)
+                                if self.proxy_container else '[]'),
+                proxy='http://proxy:8118' if self.proxy_container else '',
                 **{p: self.to_host_path(getattr(self.paths, p)) for p in [
                     'seeds', 'page_clf', 'link_clf', 'redis_conf', 'out',
                     'models',
