@@ -136,8 +136,13 @@ class Service:
         kwargs['page_clf_data'] = decode_model_data(request['page_model'])
         if 'link_model' in request:
             kwargs['link_clf_data'] = decode_model_data(request['link_model'])
+        kwargs.update({
+            field: request[field] for field in ['page_limit', 'hints', 'broadness']
+            if field in request})
         if 'page_limit' in request:
             kwargs['page_limit'] = request['page_limit']
+        if 'hints' in request:
+            kwargs['hints'] = request['hints']
         process = self.process_class(id_=id_, **kwargs)
         process.start()
         self.running[id_] = process

@@ -31,6 +31,8 @@ services:
       - -a
       - seeds=/dd_crawler/seeds.txt
       - -a
+      - hints=/dd_crawler/hints.txt
+      - -a
       - clf=/dd_crawler/Q.joblib
       - -a
       - page_clf=/dd_crawler/page_clf.joblib
@@ -42,6 +44,8 @@ services:
       - HTTP_PROXY={proxy}
       - -s
       - HTTPS_PROXY={proxy}
+      - -s
+      - QUEUE_MAX_RELEVANT_DOMAINS={max_relevant_domains}
     dns:
       - 127.0.0.1
     links:
