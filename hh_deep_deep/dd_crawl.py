@@ -105,6 +105,7 @@ class DDCrawlerProcess(CrawlProcess):
                 docker_image=self.docker_image,
                 page_limit=int(math.ceil(page_limit / n_processes)),
                 max_relevant_domains=self._max_relevant_domains(self.broadness),
+                relevancy_threshold=0.8,  # just a heuristics
                 external_links=('["{}:proxy"]'.format(self.proxy_container)
                                 if self.proxy_container else '[]'),
                 proxy='http://proxy:8118' if self.proxy_container else '',

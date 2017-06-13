@@ -46,6 +46,8 @@ services:
       - HTTPS_PROXY={proxy}
       - -s
       - QUEUE_MAX_RELEVANT_DOMAINS={max_relevant_domains}
+      - -s
+      - PAGE_RELEVANCY_THRESHOLD={relevancy_threshold}
     dns:
       - 127.0.0.1
     links:
