@@ -32,8 +32,10 @@ def clear_topics():
         ]
         if service.queue_kind == 'trainer':
             topics.append(service.output_topic('model'))
+        if service.queue_kind == 'crawler':
+            topics.append(service.hints_input_topic)
         for topic in topics:
-            consumer = KafkaConsumer(topic, consumer_timeout_ms=10,
+            consumer = KafkaConsumer(topic, consumer_timeout_ms=100,
                                      group_id='{}-group'.format(topic))
             for _ in consumer:
                 pass
@@ -102,11 +104,15 @@ def _check_progress_pages(progress_consumer, pages_consumer,
         progress = check_progress(progress_message)
         if progress and (not check_trainer or
                          'Last deep-deep model checkpoint' in progress):
-            break
+            return progress
 
 
 def _test_crawler_service(test_id: str, send: Callable[[str, Dict], None],
                           start_message: Dict) -> None:
+    start_message.update({
+        'hints': start_message['seeds'][:1],
+        'broadness': 'N10',
+    })
     crawler_service = ATestService(
         'crawler', check_updates_every=2, max_workers=2, debug=DEBUG)
     progress_consumer, pages_consumer = [
@@ -118,16 +124,23 @@ def _test_crawler_service(test_id: str, send: Callable[[str, Dict], None],
 
     debug('Sending start crawler message')
     send(crawler_service.input_topic, start_message)
+    debug('Sending additional hints')
+    send(crawler_service.hints_input_topic, {
+        'workspace_id': start_message['id'],
+        'url': start_message['seeds'][1],
+        'pinned': True,
+    })
     try:
-        _check_progress_pages(progress_consumer, pages_consumer)
+        progress = _check_progress_pages(progress_consumer, pages_consumer)
     finally:
+        # TODO - check progress message
         send(crawler_service.input_topic, stop_crawl_message(test_id))
         send(crawler_service.input_topic, {'from-tests': 'stop'})
         crawler_service_thread.join()
 
 
-def debug(*args: List[str]) -> None:
-    print('{} '.format('>' * 60), *args)
+def debug(arg, *args: List[str]) -> None:
+    print('{} '.format('>' * 60), arg, *args)
 
 
 def check_progress(message):

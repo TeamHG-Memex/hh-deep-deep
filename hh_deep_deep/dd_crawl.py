@@ -117,6 +117,9 @@ class DDCrawlerProcess(CrawlProcess):
         logging.info('Crawl "{}" stopped'.format(self.pid))
         self.pid = None
 
+    def handle_hint(self, url: str, pinned: bool):
+        pass  # TODO
+
     def _get_updates(self) -> Tuple[str, List[str]]:
         n_last = self.get_n_last()
         csv_paths = list(self.paths.out.glob('*.csv'))
