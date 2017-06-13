@@ -17,6 +17,7 @@ class DDCrawlerPaths(CrawlPaths):
         self.out = self.root.joinpath('out')
         self.redis_conf = self.root.joinpath('redis.conf')
         self.hints = self.root.joinpath('hints.txt')
+        self.workspace_id = self.root.joinpath('workspace_id.txt')
 
 
 class DDCrawlerProcess(CrawlProcess):
@@ -26,6 +27,7 @@ class DDCrawlerProcess(CrawlProcess):
     def __init__(self, *,
                  page_clf_data: bytes,
                  link_clf_data: bytes,
+                 workspace_id: str,
                  root: Path=None,
                  max_workers: int=None,
                  hints: List[str]=(),
@@ -36,6 +38,7 @@ class DDCrawlerProcess(CrawlProcess):
             root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.link_clf_data = link_clf_data
+        self.workspace_id = workspace_id
         self.max_workers = max_workers
         self.hints = hints
         self.broadness = broadness
@@ -46,7 +49,8 @@ class DDCrawlerProcess(CrawlProcess):
         """
         paths = DDCrawlerPaths(root)
         if not all(p.exists() for p in [
-                paths.pid, paths.id, paths.seeds, paths.page_clf, paths.link_clf]):
+                paths.pid, paths.id, paths.seeds, paths.page_clf, paths.link_clf,
+                paths.workspace_id]):
             return
         if not cls._is_running(paths.root):
             logging.warning('Cleaning up job in {}.'.format(paths.root))
@@ -64,6 +68,7 @@ class DDCrawlerProcess(CrawlProcess):
         return cls(
             pid=paths.pid.read_text(),
             id_=paths.id.read_text(),
+            workspace_id=paths.workspace_id.read_text(),
             seeds=seeds,
             hints=hints,
             page_clf_data=paths.page_clf.read_bytes(),
@@ -87,6 +92,7 @@ class DDCrawlerProcess(CrawlProcess):
         assert self.pid is None
         self.paths.mkdir()
         self.paths.id.write_text(self.id_)
+        self.paths.workspace_id.write_text(self.workspace_id)
         self.paths.page_clf.write_bytes(self.page_clf_data)
         self.paths.link_clf.write_bytes(self.link_clf_data)
         self.paths.seeds.write_text(

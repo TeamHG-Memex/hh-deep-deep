@@ -15,7 +15,7 @@ from hh_deep_deep.utils import configure_logging
 configure_logging()
 
 
-DEBUG = True
+DEBUG = False
 
 
 class ATestService(Service):
@@ -53,6 +53,7 @@ def test_service():
 
     def send(topic: str, message: Dict):
         producer.send(topic, message).get()
+        producer.flush()
 
     start_crawler_message = _test_trainer_service(test_id, send)
 
@@ -110,6 +111,7 @@ def _check_progress_pages(progress_consumer, pages_consumer,
 def _test_crawler_service(test_id: str, send: Callable[[str, Dict], None],
                           start_message: Dict) -> None:
     start_message.update({
+        'workspace_id': 'ws-id-1',
         'hints': start_message['seeds'][:1],
         'broadness': 'N10',
     })
@@ -126,7 +128,7 @@ def _test_crawler_service(test_id: str, send: Callable[[str, Dict], None],
     send(crawler_service.input_topic, start_message)
     debug('Sending additional hints')
     send(crawler_service.hints_input_topic, {
-        'workspace_id': start_message['id'],
+        'workspace_id': start_message['workspace_id'],
         'url': start_message['seeds'][1],
         'pinned': True,
     })

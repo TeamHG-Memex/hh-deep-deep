@@ -29,7 +29,7 @@ class Service:
         self.queue_kind = queue_kind
         self.required_keys = ['id', 'seeds'] + {
             'trainer': ['page_model'],
-            'crawler': ['page_model', 'link_model'],
+            'crawler': ['page_model', 'link_model', 'workspace_id'],
             }[queue_kind]
         self.process_class = {
             'trainer': DeepDeepProcess,
@@ -137,7 +137,8 @@ class Service:
         if 'link_model' in request:
             kwargs['link_clf_data'] = decode_model_data(request['link_model'])
         kwargs.update({
-            field: request[field] for field in ['page_limit', 'hints', 'broadness']
+            field: request[field] for field in [
+                'workspace_id', 'page_limit', 'hints', 'broadness']
             if field in request})
         if 'page_limit' in request:
             kwargs['page_limit'] = request['page_limit']
@@ -199,15 +200,20 @@ class Service:
         self.send(topic, {'id': id_, 'link_model': encoded_model})
 
     def handle_hint(self, value: dict):
-        id_ = value['workspace_id']
-        process = self.running.get(id_)
-        if process is not None:
-            logging.info('Got hint message for "{id}", pinned={pinned}, url {url}'
-                         .format(id=id_, **value))
-            process.handle_hint(value['url'], value['pinned'])
-        else:
-            logging.info('Got hint message for "{id}", but no process is running'
-                         .format(id=id_))
+        workspace_id = value['workspace_id']
+        passed = False
+        for process in self.running.values():
+            if process.workspace_id == workspace_id:
+                passed = True
+                logging.info(
+                    'Pass hint message from workspace "{workspace_id}" to crawl "{id}", '
+                    'pinned={pinned}, url {url}'
+                    .format(id=process.id_, **value))
+                process.handle_hint(value['url'], value['pinned'])
+        if not passed:
+            logging.info('Got hint message from workspace "{}", '
+                         'but no process from this workspace is running'
+                         .format(workspace_id))
 
     def send(self, topic: str, result: Dict):
         message = json.dumps(result).encode('utf8')

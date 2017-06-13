@@ -21,6 +21,7 @@ services:
     network_mode: bridge
     volumes:
       - {seeds}:/dd_crawler/seeds.txt
+      - {hints}:/dd_crawler/hints.txt
       - {link_clf}:/dd_crawler/Q.joblib
       - {page_clf}:/dd_crawler/page_clf.joblib
       - {out}:/out
