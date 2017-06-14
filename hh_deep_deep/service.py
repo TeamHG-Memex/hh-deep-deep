@@ -172,7 +172,7 @@ class Service:
                 self.send_progress_update(id_, updates)
                 if hasattr(process, 'get_new_model'):
                     new_model_data = process.get_new_model()
-                    if new_model_data is not None:
+                    if new_model_data:
                         self.send_model_update(id_, new_model_data)
 
     def output_topic(self, kind: str) -> str:
