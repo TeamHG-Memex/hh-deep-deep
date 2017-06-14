@@ -199,6 +199,7 @@ class Service:
                      .format(topic, len(encoded_model)))
         self.send(topic, {'id': id_, 'link_model': encoded_model})
 
+    @log_ignore_exception
     def handle_hint(self, value: dict):
         workspace_id = value['workspace_id']
         passed = False
