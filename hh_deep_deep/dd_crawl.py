@@ -150,7 +150,10 @@ class DDCrawlerProcess(CrawlProcess):
     def handle_hint(self, url: str, pinned: bool):
         self._compose_call(
             'exec', 'crawler',
-            'scrapy', 'hint', 'deepdeep', 'pin' if pinned else 'unpin', url)
+            'scrapy', 'hint', 'deepdeep', 'pin' if pinned else 'unpin', url,
+            '-s', 'REDIS_HOST=redis',
+            '-s', 'LOG_LEVEL=WARNING',
+        )
 
     def _get_updates(self) -> Tuple[str, List[str]]:
         n_last = self.get_n_last()
