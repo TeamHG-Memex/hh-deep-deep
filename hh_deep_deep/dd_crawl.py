@@ -1,6 +1,7 @@
 import csv
 import logging
 from pathlib import Path
+import re
 import math
 import multiprocessing
 import subprocess
@@ -15,6 +16,8 @@ class DDCrawlerPaths(CrawlPaths):
         self.link_clf = self.root.joinpath('Q.joblib')
         self.out = self.root.joinpath('out')
         self.redis_conf = self.root.joinpath('redis.conf')
+        self.hints = self.root.joinpath('hints.txt')
+        self.workspace_id = self.root.joinpath('workspace_id.txt')
 
 
 class DDCrawlerProcess(CrawlProcess):
@@ -24,15 +27,21 @@ class DDCrawlerProcess(CrawlProcess):
     def __init__(self, *,
                  page_clf_data: bytes,
                  link_clf_data: bytes,
+                 workspace_id: str,
                  root: Path=None,
                  max_workers: int=None,
+                 hints: List[str]=(),
+                 broadness: str='BROAD',
                  **kwargs):
         super().__init__(**kwargs)
         self.paths = DDCrawlerPaths(
             root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.link_clf_data = link_clf_data
+        self.workspace_id = workspace_id
         self.max_workers = max_workers
+        self.hints = hints
+        self.broadness = broadness
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
@@ -40,7 +49,8 @@ class DDCrawlerProcess(CrawlProcess):
         """
         paths = DDCrawlerPaths(root)
         if not all(p.exists() for p in [
-                paths.pid, paths.id, paths.seeds, paths.page_clf, paths.link_clf]):
+                paths.pid, paths.id, paths.seeds, paths.page_clf, paths.link_clf,
+                paths.workspace_id]):
             return
         if not cls._is_running(paths.root):
             logging.warning('Cleaning up job in {}.'.format(paths.root))
@@ -50,10 +60,17 @@ class DDCrawlerProcess(CrawlProcess):
             return
         with paths.seeds.open('rt', encoding='utf8') as f:
             seeds = [line.strip() for line in f]
+        if paths.hints.exists():
+            with paths.hints.open('rt', encoding='utf8') as f:
+                hints = [line.strip() for line in f]
+        else:
+            hints = []
         return cls(
             pid=paths.pid.read_text(),
             id_=paths.id.read_text(),
+            workspace_id=paths.workspace_id.read_text(),
             seeds=seeds,
+            hints=hints,
             page_clf_data=paths.page_clf.read_bytes(),
             link_clf_data=paths.link_clf.read_bytes(),
             root=root,
@@ -75,11 +92,13 @@ class DDCrawlerProcess(CrawlProcess):
         assert self.pid is None
         self.paths.mkdir()
         self.paths.id.write_text(self.id_)
+        self.paths.workspace_id.write_text(self.workspace_id)
         self.paths.page_clf.write_bytes(self.page_clf_data)
         self.paths.link_clf.write_bytes(self.link_clf_data)
         self.paths.seeds.write_text(
-            '\n'.join(url for url in self.seeds),
-            encoding='utf8')
+            '\n'.join(url for url in self.seeds), encoding='utf8')
+        self.paths.hints.write_text(
+            '\n'.join(url for url in self.hints), encoding='utf8')
         n_processes = multiprocessing.cpu_count()
         if self.max_workers:
             n_processes = min(self.max_workers, n_processes)
@@ -91,11 +110,13 @@ class DDCrawlerProcess(CrawlProcess):
             compose_templates.format(
                 docker_image=self.docker_image,
                 page_limit=int(math.ceil(page_limit / n_processes)),
+                max_relevant_domains=self._max_relevant_domains(self.broadness),
+                relevancy_threshold=0.8,  # just a heuristics
                 external_links=('["{}:proxy"]'.format(self.proxy_container)
                                 if self.proxy_container else '[]'),
                 proxy='http://proxy:8118' if self.proxy_container else '',
                 **{p: self.to_host_path(getattr(self.paths, p)) for p in [
-                    'seeds', 'page_clf', 'link_clf', 'redis_conf', 'out',
+                    'seeds', 'hints', 'page_clf', 'link_clf', 'redis_conf', 'out',
                     'models',
                 ]}
             ))
@@ -108,6 +129,15 @@ class DDCrawlerProcess(CrawlProcess):
         self.paths.pid.write_text(self.pid)
         logging.info('Crawl "{}" started'.format(self.id_))
 
+    @staticmethod
+    def _max_relevant_domains(broadness: str) -> str:
+        if broadness == 'DEEP':
+            return '0'
+        elif broadness == 'BROAD':
+            return ''
+        else:
+            return re.match('N(\d+)$', broadness).groups()[0]
+
     def stop(self, verbose=False):
         assert self.pid is not None
         if verbose:
@@ -116,6 +146,14 @@ class DDCrawlerProcess(CrawlProcess):
         self.paths.pid.unlink()
         logging.info('Crawl "{}" stopped'.format(self.pid))
         self.pid = None
+
+    def handle_hint(self, url: str, pinned: bool):
+        self._compose_call(
+            'exec', '-T', 'crawler',
+            'scrapy', 'hint', 'deepdeep', 'pin' if pinned else 'unpin', url,
+            '-s', 'REDIS_HOST=redis',
+            '-s', 'LOG_LEVEL=WARNING',
+        )
 
     def _get_updates(self) -> Tuple[str, List[str]]:
         n_last = self.get_n_last()

@@ -29,7 +29,7 @@ class Service:
         self.queue_kind = queue_kind
         self.required_keys = ['id', 'seeds'] + {
             'trainer': ['page_model'],
-            'crawler': ['page_model', 'link_model'],
+            'crawler': ['page_model', 'link_model', 'workspace_id'],
             }[queue_kind]
         self.process_class = {
             'trainer': DeepDeepProcess,
@@ -41,6 +41,7 @@ class Service:
         # Together with consumer_timeout_ms, this defines responsiveness.
         self.check_updates_every = check_updates_every
         self.debug = debug
+
         self.input_topic = (
             '{}dd-{}-input'.format(self.queue_prefix, self.queue_kind))
         self.consumer = KafkaConsumer(
@@ -49,9 +50,21 @@ class Service:
             consumer_timeout_ms=200,
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
+        if self.queue_kind == 'crawler':
+            self.hints_input_topic = (
+                '{}dd-{}-hints-input'.format(self.queue_prefix, self.queue_kind))
+            self.hints_consumer = KafkaConsumer(
+                self.hints_input_topic,
+                group_id='{}-group'.format(self.hints_input_topic),
+                consumer_timeout_ms=200,
+                **kafka_kwargs)
+        else:
+            self.hints_consumer = None
+
         self.producer = KafkaProducer(
             max_request_size=self.max_message_size,
             **kafka_kwargs)
+
         self.crawler_process_kwargs = dict(crawler_process_kwargs)
         if self.jobs_prefix:
             self.crawler_process_kwargs['jobs_prefix'] = self.jobs_prefix
@@ -72,15 +85,7 @@ class Service:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             while True:
                 counter += 1
-                for message in self.consumer:
-                    self._debug_save_message(message.value, 'incoming')
-                    try:
-                        value = json.loads(message.value.decode('utf8'))
-                    except Exception as e:
-                        logging.error('Error decoding message: {}'
-                                      .format(repr(message.value)),
-                                      exc_info=e)
-                        continue
+                for value in self._read_consumer(self.consumer):
                     if value == {'from-tests': 'stop'}:
                         logging.info('Got message to stop (from tests)')
                         return
@@ -93,10 +98,23 @@ class Service:
                         logging.error('Dropping a message in unknown format: {}'
                                       .format(value.keys() if hasattr(value, 'keys')
                                               else type(value)))
+                if self.hints_consumer is not None:
+                    for value in self._read_consumer(self.hints_consumer):
+                        executor.submit(self.handle_hint, value)
                 if counter % self.check_updates_every == 0:
                     self.send_updates()
                 self.producer.flush()
                 self.consumer.commit()
+
+    def _read_consumer(self, consumer):
+        for message in consumer:
+            self._debug_save_message(message.value, 'incoming')
+            try:
+                yield json.loads(message.value.decode('utf8'))
+            except Exception as e:
+                logging.error('Error decoding message: {}'
+                              .format(repr(message.value)),
+                              exc_info=e)
 
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
@@ -118,8 +136,14 @@ class Service:
         kwargs['page_clf_data'] = decode_model_data(request['page_model'])
         if 'link_model' in request:
             kwargs['link_clf_data'] = decode_model_data(request['link_model'])
+        kwargs.update({
+            field: request[field] for field in [
+                'workspace_id', 'page_limit', 'hints', 'broadness']
+            if field in request})
         if 'page_limit' in request:
             kwargs['page_limit'] = request['page_limit']
+        if 'hints' in request:
+            kwargs['hints'] = request['hints']
         process = self.process_class(id_=id_, **kwargs)
         process.start()
         self.running[id_] = process
@@ -148,7 +172,7 @@ class Service:
                 self.send_progress_update(id_, updates)
                 if hasattr(process, 'get_new_model'):
                     new_model_data = process.get_new_model()
-                    if new_model_data is not None:
+                    if new_model_data:
                         self.send_model_update(id_, new_model_data)
 
     def output_topic(self, kind: str) -> str:
@@ -174,6 +198,23 @@ class Service:
         logging.info('Sending new model to {}, model size {:,} bytes'
                      .format(topic, len(encoded_model)))
         self.send(topic, {'id': id_, 'link_model': encoded_model})
+
+    @log_ignore_exception
+    def handle_hint(self, value: dict):
+        workspace_id = value['workspace_id']
+        passed = False
+        for process in self.running.values():
+            if process.workspace_id == workspace_id:
+                passed = True
+                logging.info(
+                    'Pass hint message from workspace "{workspace_id}" to crawl "{id}", '
+                    'pinned={pinned}, url {url}'
+                    .format(id=process.id_, **value))
+                process.handle_hint(value['url'], value['pinned'])
+        if not passed:
+            logging.info('Got hint message from workspace "{}", '
+                         'but no process from this workspace is running'
+                         .format(workspace_id))
 
     def send(self, topic: str, result: Dict):
         message = json.dumps(result).encode('utf8')
