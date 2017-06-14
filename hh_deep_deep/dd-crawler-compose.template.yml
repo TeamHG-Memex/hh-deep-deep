@@ -49,6 +49,8 @@ services:
       - QUEUE_MAX_RELEVANT_DOMAINS={max_relevant_domains}
       - -s
       - PAGE_RELEVANCY_THRESHOLD={relevancy_threshold}
+      - -s
+      - FILES_STORE=/out/media
     dns:
       - 127.0.0.1
     links:
