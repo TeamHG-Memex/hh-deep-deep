@@ -19,6 +19,7 @@ class CrawlPaths:
         root = root.absolute()
         self.root = root
         self.id = root.joinpath('id.txt')
+        self.workspace_id = self.root.joinpath('workspace_id.txt')
         self.pid = root.joinpath('pid.txt')
         self.page_clf = root.joinpath('page_clf.joblib')
         self.seeds = root.joinpath('seeds.txt')
@@ -35,6 +36,7 @@ class CrawlProcess:
 
     def __init__(self, *,
                  id_: str,
+                 workspace_id: str,
                  seeds: List[str],
                  docker_image: str=None,
                  host_root: str=None,
@@ -44,6 +46,7 @@ class CrawlProcess:
                  proxy_container: str=None):
         self.pid = pid
         self.id_ = id_
+        self.workspace_id = workspace_id
         self.seeds = seeds
         self.docker_image = docker_image or self.default_docker_image
         self.host_root = Path(host_root or '.').absolute()

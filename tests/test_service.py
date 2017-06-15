@@ -48,20 +48,21 @@ def test_service():
 
     debug('Clearing topics')
     clear_topics()
-    test_id = 'test-id'
+    job_id = 'test-id'
+    ws_id = 'test-ws-id'
     producer = KafkaProducer(value_serializer=encode_message)
 
     def send(topic: str, message: Dict):
         producer.send(topic, message).get()
         producer.flush()
 
-    start_crawler_message = _test_trainer_service(test_id, send)
+    start_crawler_message = _test_trainer_service(job_id, ws_id, send)
 
-    _test_crawler_service(test_id, send, start_crawler_message)
+    _test_crawler_service(start_crawler_message, send)
 
 
-def _test_trainer_service(test_id: str, send: Callable[[str, Dict], None])\
-        -> Dict:
+def _test_trainer_service(job_id: str, ws_id: str,
+                          send: Callable[[str, Dict], None]) -> Dict:
     """ Test trainer service, return start message for crawler service.
     """
     trainer_service = ATestService(
@@ -73,7 +74,7 @@ def _test_trainer_service(test_id: str, send: Callable[[str, Dict], None])\
     trainer_service_thread = threading.Thread(target=trainer_service.run)
     trainer_service_thread.start()
 
-    start_message = start_trainer_message(test_id)
+    start_message = start_trainer_message(job_id, ws_id)
     debug('Sending start trainer message')
     send(trainer_service.input_topic, start_message)
     try:
@@ -82,11 +83,11 @@ def _test_trainer_service(test_id: str, send: Callable[[str, Dict], None])\
         debug('Waiting for model, this might take a while...')
         model_message = next(model_consumer).value
         debug('Got it.')
-        assert model_message['id'] == test_id
+        assert model_message['id'] == job_id
         link_model = model_message['link_model']
 
     finally:
-        send(trainer_service.input_topic, stop_crawl_message(test_id))
+        send(trainer_service.input_topic, stop_crawl_message(job_id))
         send(trainer_service.input_topic, {'from-tests': 'stop'})
         trainer_service_thread.join()
 
@@ -108,10 +109,9 @@ def _check_progress_pages(progress_consumer, pages_consumer,
             return progress
 
 
-def _test_crawler_service(test_id: str, send: Callable[[str, Dict], None],
-                          start_message: Dict) -> None:
+def _test_crawler_service(
+        start_message: Dict, send: Callable[[str, Dict], None]) -> None:
     start_message.update({
-        'workspace_id': 'ws-id-1',
         'hints': start_message['seeds'][:1],
         'broadness': 'N10',
     })
@@ -136,7 +136,7 @@ def _test_crawler_service(test_id: str, send: Callable[[str, Dict], None],
         progress = _check_progress_pages(progress_consumer, pages_consumer)
     finally:
         # TODO - check progress message
-        send(crawler_service.input_topic, stop_crawl_message(test_id))
+        send(crawler_service.input_topic, stop_crawl_message(start_message['id']))
         send(crawler_service.input_topic, {'from-tests': 'stop'})
         crawler_service_thread.join()
 
@@ -169,7 +169,7 @@ def check_pages(message):
         assert s['url'].startswith('http')
 
 
-def start_trainer_message(id_: str) -> Dict:
+def start_trainer_message(id_: str, ws_id: str) -> Dict:
     model = DefaultModel()
     model.fit(
         [{'url': 'http://a.com', 'text': text}
@@ -178,6 +178,7 @@ def start_trainer_message(id_: str) -> Dict:
         [1, 1, 1, 0, 0, 0, 0])
     return {
         'id': id_,
+        'workspace_id': ws_id,
         'page_model': encode_model_data(pickle.dumps(model)),
         'seeds': ['http://wikipedia.org', 'http://news.ycombinator.com'],
     }

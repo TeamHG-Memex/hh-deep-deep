@@ -27,9 +27,9 @@ class Service:
                  debug: bool=False,
                  **crawler_process_kwargs):
         self.queue_kind = queue_kind
-        self.required_keys = ['id', 'seeds'] + {
+        self.required_keys = ['id', 'workspace_id', 'seeds'] + {
             'trainer': ['page_model'],
-            'crawler': ['page_model', 'link_model', 'workspace_id'],
+            'crawler': ['page_model', 'link_model'],
             }[queue_kind]
         self.process_class = {
             'trainer': DeepDeepProcess,

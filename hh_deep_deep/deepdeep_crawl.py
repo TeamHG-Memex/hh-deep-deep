@@ -38,7 +38,8 @@ class DeepDeepProcess(CrawlProcess):
         """
         paths = DeepDeepPaths(root)
         if not all(p.exists() for p in [
-                paths.pid, paths.id, paths.seeds, paths.page_clf]):
+                paths.pid, paths.id, paths.seeds, paths.page_clf, paths.workspace_id,
+                ]):
             return
         pid = paths.pid.read_text()
         if not cls._is_running(pid):
@@ -53,6 +54,7 @@ class DeepDeepProcess(CrawlProcess):
         return cls(
             pid=pid,
             id_=paths.id.read_text(),
+            workspace_id=paths.workspace_id.read_text(),
             seeds=seeds,
             page_clf_data=paths.page_clf.read_bytes(),
             root=root,
@@ -76,6 +78,7 @@ class DeepDeepProcess(CrawlProcess):
         assert self.pid is None
         self.paths.mkdir()
         self.paths.id.write_text(self.id_)
+        self.paths.workspace_id.write_text(self.workspace_id)
         self.paths.page_clf.write_bytes(self.page_clf_data)
         with self.paths.seeds.open('wt', encoding='utf8') as f:
             csv.writer(f).writerows([url] for url in self.seeds)

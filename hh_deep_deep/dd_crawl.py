@@ -17,7 +17,6 @@ class DDCrawlerPaths(CrawlPaths):
         self.out = self.root.joinpath('out')
         self.redis_conf = self.root.joinpath('redis.conf')
         self.hints = self.root.joinpath('hints.txt')
-        self.workspace_id = self.root.joinpath('workspace_id.txt')
 
 
 class DDCrawlerProcess(CrawlProcess):
@@ -27,7 +26,6 @@ class DDCrawlerProcess(CrawlProcess):
     def __init__(self, *,
                  page_clf_data: bytes,
                  link_clf_data: bytes,
-                 workspace_id: str,
                  root: Path=None,
                  max_workers: int=None,
                  hints: List[str]=(),
@@ -38,7 +36,6 @@ class DDCrawlerProcess(CrawlProcess):
             root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.link_clf_data = link_clf_data
-        self.workspace_id = workspace_id
         self.max_workers = max_workers
         self.hints = hints
         self.broadness = broadness
