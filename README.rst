@@ -19,6 +19,7 @@ Incoming: start the crawl, ``dd-trainer-input``::
 
     {
       "id": "some crawl id",
+      "workspace_id": "some workspace id",
       "page_model": "b64-encoded page classifier",
       "seeds": ["http://example.com", "http://example.com/2"]
     }
@@ -66,16 +67,29 @@ Incoming: start the crawl, ``dd-crawler-input``::
 
     {
       "id": "some crawl id",
+      "workspace_id": "some workspace id",
       "page_model": "b64-encoded page classifier",
       "link_model": "b64-encoded deep-deep model",
       "seeds": ["http://example.com", "http://example.com/2"],
+      "hints": ["http://example2.com", "http://example2.com/2"],
+      "broadness": "DEEP",
+      "page_limit": 10000000,
     }
 
-An optional ``page_limit`` key can be added.
+Fields ``hints`` and ``page_limit`` are optional. Possible values for
+``broadness`` field are ``DEEP``, ``N<number>``, ``BROAD``.
 
 Stopping the crawl via ``dd-crawler-input``, and
 ``dd-crawler-output-pages``, ``dd-crawler-output-progress`` work exactly the same
 as the corresponding dd-trainer queues.
+
+Incoming: add/remove hints, ``dd-crawler-hints-input``::
+
+    {
+      "workspace_id": "id of the workspace",
+      "url": "the pinned url",
+      "pinned": true / false,
+    }
 
 
 Running with docker
