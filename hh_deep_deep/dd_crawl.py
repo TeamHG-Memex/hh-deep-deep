@@ -192,7 +192,7 @@ class DDCrawlerProcess(CrawlProcess):
                         n_crawled=n_crawled,
                         n_domains=n_domains,
                         n_relevant_domains=n_relevant_domains,
-                        mean_score=total_score / n_crawled,
+                        mean_score=100 * total_score / n_crawled,
                     ))
         else:
             progress, pages = 'Craw is not running yet', []
