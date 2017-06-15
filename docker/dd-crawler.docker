@@ -1,5 +1,5 @@
 # FROM dd-crawler
-FROM hyperiongray/dd-crawler:0.2.1
+FROM hyperiongray/dd-crawler:0.2.2
 # ^^ update hyperiongray/dd-crawler-hh as well (image and docker-compose.yml)
 
 COPY hh-page-classifier/requirements.txt hh-page-classifier/requirements.txt
