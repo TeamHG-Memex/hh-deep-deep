@@ -5,11 +5,13 @@ import gzip
 import hashlib
 import logging
 import json
+import time
 from typing import Dict, Optional
 import zlib
 
 from kafka import KafkaConsumer, KafkaProducer
 
+from .crawl_utils import CrawlProcess
 from .deepdeep_crawl import DeepDeepProcess
 from .dd_crawl import DDCrawlerProcess
 from .utils import configure_logging, log_ignore_exception
@@ -167,6 +169,7 @@ class Service:
                     'Crawl should be running but it\'s not, stopping.')
                 process.stop(verbose=True)
                 self.running.pop(id_)
+                self.send_stopped_message(process)
             else:
                 updates = process.get_updates()
                 self.send_progress_update(id_, updates)
@@ -198,6 +201,15 @@ class Service:
         logging.info('Sending new model to {}, model size {:,} bytes'
                      .format(topic, len(encoded_model)))
         self.send(topic, {'id': id_, 'link_model': encoded_model})
+
+    def send_stopped_message(self, process: CrawlProcess):
+        self.send('events-input', {
+            'action': 'finished',
+            'timestamp': time.time(),
+            'workspaceId': process.workspace_id,
+            'event': 'dd-{}'.format(self.queue_kind),
+            "arguments": json.dumps({'jobId': process.id_}),
+        })
 
     @log_ignore_exception
     def handle_hint(self, value: dict):
