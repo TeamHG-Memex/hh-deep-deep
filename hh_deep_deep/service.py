@@ -138,6 +138,7 @@ class Service:
                              .format(p_id, workspace_id))
                 process.stop()
                 self.running.pop(p_id, None)
+                self.send_stopped_message(process)
         kwargs = dict(self.crawler_process_kwargs)
         kwargs['seeds'] = request['seeds']
         kwargs['page_clf_data'] = decode_model_data(request['page_model'])
