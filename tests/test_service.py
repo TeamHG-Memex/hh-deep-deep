@@ -1,6 +1,7 @@
 import json
 import logging
 import threading
+import time
 import pickle
 from typing import Dict, Callable, List
 
@@ -74,8 +75,11 @@ def _test_trainer_service(job_id: str, ws_id: str,
     trainer_service_thread = threading.Thread(target=trainer_service.run)
     trainer_service_thread.start()
 
-    start_message = start_trainer_message(job_id, ws_id)
     debug('Sending start trainer message')
+    send(trainer_service.input_topic, start_trainer_message(job_id + '-early', ws_id))
+    time.sleep(2)
+    start_message = start_trainer_message(job_id, ws_id)
+    debug('Sending another start trainer message (old should stop)')
     send(trainer_service.input_topic, start_message)
     try:
         _check_progress_pages(progress_consumer, pages_consumer,
@@ -88,6 +92,7 @@ def _test_trainer_service(job_id: str, ws_id: str,
 
     finally:
         send(trainer_service.input_topic, stop_crawl_message(job_id))
+        send(trainer_service.input_topic, stop_crawl_message(job_id + '-early'))
         send(trainer_service.input_topic, {'from-tests': 'stop'})
         trainer_service_thread.join()
 
@@ -160,7 +165,7 @@ def check_progress(message):
 
 def check_pages(message):
     value = message.value
-    assert value['id'] == 'test-id'
+    assert value['id'] in {'test-id', 'test-id-early'}
     page_sample = value['page_sample']
     assert len(page_sample) >= 1
     for s in page_sample:

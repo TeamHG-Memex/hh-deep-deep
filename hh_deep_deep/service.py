@@ -104,7 +104,7 @@ class Service:
                     for value in self._read_consumer(self.hints_consumer):
                         executor.submit(self.handle_hint, value)
                 if counter % self.check_updates_every == 0:
-                    self.send_updates()
+                    executor.submit(self.send_updates)
                 self.producer.flush()
                 self.consumer.commit()
 
@@ -121,6 +121,7 @@ class Service:
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
         id_ = request['id']
+        workspace_id = request['workspace_id']
         logging.info(
             'Got start crawl message with id "{id}", {seeds} seeds, '
             'page model size {page_model:,} bytes{rest}.'.format(
@@ -130,23 +131,26 @@ class Service:
                 rest=', link model size {:,}'.format(len(request['link_model']))
                      if request.get('link_model') else '',
             ))
-        current_process = self.running.pop(id_, None)
-        if current_process is not None:
-            current_process.stop()
+        # stop all running processes for this workspace (should be at most 1 usually)
+        for p_id, process in list(self.running.items()):
+            if process.workspace_id == workspace_id:
+                logging.info('Stopping old process {} for workspace {}'
+                             .format(p_id, workspace_id))
+                process.stop()
+                self.running.pop(p_id, None)
         kwargs = dict(self.crawler_process_kwargs)
         kwargs['seeds'] = request['seeds']
         kwargs['page_clf_data'] = decode_model_data(request['page_model'])
         if 'link_model' in request:
             kwargs['link_clf_data'] = decode_model_data(request['link_model'])
         kwargs.update({
-            field: request[field] for field in [
-                'workspace_id', 'page_limit', 'hints', 'broadness']
+            field: request[field] for field in ['page_limit', 'hints', 'broadness']
             if field in request})
         if 'page_limit' in request:
             kwargs['page_limit'] = request['page_limit']
         if 'hints' in request:
             kwargs['hints'] = request['hints']
-        process = self.process_class(id_=id_, **kwargs)
+        process = self.process_class(id_=id_, workspace_id=workspace_id, **kwargs)
         process.start()
         self.running[id_] = process
 
