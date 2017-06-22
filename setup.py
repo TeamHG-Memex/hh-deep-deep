@@ -7,7 +7,7 @@ setup(
     packages=['hh_deep_deep'],
     include_package_data=True,
     install_requires=[
-        'kafka-python',
+        'kafka-python==1.3.3',
     ],
     entry_points = {
         'console_scripts': [
