@@ -7,7 +7,7 @@ import re
 import subprocess
 from typing import Dict, List, Optional, Tuple
 
-from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path, get_last_lines
+from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path
 
 
 class DeepDeepPaths(CrawlPaths):
@@ -203,3 +203,10 @@ def get_last_valid_jl_items(path: Path, n_last: int) -> List[Dict]:
         except Exception:
             pass
     return last_items[-n_last:]
+
+
+def get_last_lines(path: Path, n_last: int) -> List[str]:
+    # This is only valid if there are no newlines in items
+    # TODO - more efficient, skip to the end of file
+    with path.open('rt', encoding='utf8') as f:
+        return list(deque(f, maxlen=n_last))

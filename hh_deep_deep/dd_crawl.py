@@ -1,13 +1,14 @@
-import csv
+from collections import deque
+import json
 import logging
 from pathlib import Path
 import re
 import math
 import multiprocessing
 import subprocess
-from typing import Optional, Tuple, List, Dict
+from typing import Any, Dict, Optional, List
 
-from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path, get_last_lines
+from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path
 
 
 class DDCrawlerPaths(CrawlPaths):
@@ -39,6 +40,7 @@ class DDCrawlerProcess(CrawlProcess):
         self.max_workers = max_workers
         self.hints = hints
         self.broadness = broadness
+        self._log_followers = {}  # type: Dict[Path, JsonLinesFollower]
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
@@ -152,37 +154,40 @@ class DDCrawlerProcess(CrawlProcess):
             '-s', 'LOG_LEVEL=WARNING',
         )
 
-    def _get_updates(self) -> Tuple[str, List[str]]:
+    def _get_updates(self) -> Dict[str, Any]:
         n_last = self.get_n_last()
-        csv_paths = list(self.paths.out.glob('*.csv'))
-        if csv_paths:
-            n_last_per_file = math.ceil(n_last / len(csv_paths))
-            last_pages = []
+        log_paths = list(self.paths.out.glob('*.log.jl'))
+        updates = {}
+        if log_paths:
+            n_last_per_file = int(math.ceil(n_last / len(log_paths)))
+            all_last_items = []
             total_score = n_crawled = n_domains = n_relevant_domains = 0
-            for csv_path in csv_paths:
-                last_items = get_last_csv_items(
-                    csv_path, n_last_per_file, exp_len=9)
-                for item in last_items:
-                    ts, url, _, _, score = item[:5]
-                    last_pages.append((float(ts), url, float(score)))
+            for path in log_paths:
+                follower = (
+                    self._log_followers.setdefault(path, JsonLinesFollower(path)))
+                last_items = deque(maxlen=n_last_per_file)
+                for item in follower.get_new_items():
+                    if item.get('has_login_form'):
+                        updates.setdefault('logins', []).append(item['url'])
+                    last_items.append(item)
                 if last_items:
-                    _total_score, _n_crawled, _n_domains, _n_relevant_domains\
-                        = last_items[-1][5:]
-                    total_score += float(_total_score)
-                    n_crawled += int(_n_crawled)
+                    all_last_items.extend(last_items)
+                    last = last_items[-1]
+                    total_score += last['total_score']
+                    n_crawled += last['n_crawled']
                     # A very small fraction (before "scale crawler=N")
                     # might overlap between workers, more might overlap
                     # in case some workers die.
-                    n_domains += int(_n_domains)
-                    n_relevant_domains += int(_n_relevant_domains)
-            last_pages.sort(key=lambda x: x[0])
-            last_pages = last_pages[-n_last:]
-            pages = [{'url': url, 'score': 100 * score}
-                     for _, url, score in last_pages]
+                    n_domains += last['n_domains']
+                    n_relevant_domains += last['n_relevant_domains']
+            all_last_items.sort(key=lambda x: x['time'])
+            updates['pages'] = [
+                {'url': it['url'], 'score': 100 * it['score']}
+                for it in all_last_items[-n_last:]]
             if n_crawled == 0:
-                progress = 'Crawl started, no updates yet'
+                updates['progress'] = 'Crawl started, no updates yet'
             else:
-                progress = (
+                updates['progress'] = (
                     '{n_crawled:,} pages processed from {n_domains:,} domains '
                     '({n_relevant_domains:,} relevant), '
                     'average score {mean_score:.1f}.'.format(
@@ -192,26 +197,35 @@ class DDCrawlerProcess(CrawlProcess):
                         mean_score=100 * total_score / n_crawled,
                     ))
         else:
-            progress, pages = 'Craw is not running yet', []
-        return progress, pages
+            updates['progress'] = 'Craw is not running yet'
+        return updates
 
     def _compose_call(self, *args):
         subprocess.check_call(
             ['docker-compose'] + list(args), cwd=str(self.paths.root))
 
 
-def get_last_csv_items(csv_path: Path, n_last: int, exp_len: int) -> List[Dict]:
-    last_lines = get_last_lines(csv_path, n_last + 1)
-    last_items = []
-    for line in last_lines:
-        try:
-            it = next(csv.reader([line]))
-        except StopIteration:
-            pass
-        except csv.Error:
-            logging.warning('Error parsing csv, line starts with "{}"'
-                            .format(line[:500]))
-        else:
-            if len(it) == exp_len:
-                last_items.append(it)
-    return last_items[-n_last:]
+class JsonLinesFollower:
+    """ Follow json lines file contents: iteration allows to read all new items
+    since last iteration.
+    """
+    def __init__(self, path: Path, encoding='utf8'):
+        self.path = path
+        self.encoding = encoding
+        self.pos = 0
+
+    def get_new_items(self):
+        with self.path.open('rb') as f:
+            f.seek(self.pos)
+            line = ''
+            last_read = True
+            for line in f:
+                try:
+                    yield json.loads(line.decode(self.encoding))
+                except Exception:
+                    last_read = False
+                else:
+                    last_read = True
+            self.pos = f.tell()
+            if not last_read:
+                self.pos -= len(line)
