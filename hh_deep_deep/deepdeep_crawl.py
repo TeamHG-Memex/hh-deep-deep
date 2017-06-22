@@ -5,9 +5,10 @@ import logging
 from pathlib import Path
 import re
 import subprocess
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path
+from .crawl_utils import (
+    CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower)
 
 
 class DeepDeepPaths(CrawlPaths):
@@ -27,6 +28,7 @@ class DeepDeepProcess(CrawlProcess):
                  **kwargs):
         super().__init__(**kwargs)
         self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
+        self.log_follower = JsonLinesFollower(self.paths.items)
         self.page_clf_data = page_clf_data
         self.checkpoint_interval = checkpoint_interval
         # last model sent in self.get_new_model
@@ -137,11 +139,11 @@ class DeepDeepProcess(CrawlProcess):
         logging.info('Removed container id {}'.format(self.pid))
         self.pid = None
 
-    def _get_updates(self) -> Tuple[str, List[Dict]]:
+    def _get_updates(self) -> Dict[str, Any]:
         if not self.paths.items.exists():
-            return 'Craw is not running yet', []
+            return {'progress': 'Craw is not running yet'}
         n_last = self.get_n_last()
-        last_items = get_last_valid_jl_items(self.paths.items, n_last)
+        last_items = deque(self.log_follower.get_new_items(), maxlen=n_last)
         if last_items:
             item_progress = get_progress_from_item(last_items[-1])
             pages = [get_sample_from_item(item) for item in last_items
@@ -151,10 +153,10 @@ class DeepDeepProcess(CrawlProcess):
                                   .format(self.last_model_file.name))
             else:
                 model_progress = 'Warning: no model checkpoints yet.'
-            progress = '{} {}'.format(model_progress, item_progress)
-            return progress, pages
+            return {'progress': '{} {}'.format(model_progress, item_progress),
+                    'pages': pages}
         else:
-            return 'Crawl started, no updates yet', []
+            return {'progress': 'Crawl started, no updates yet'}
 
     def get_new_model(self) -> Optional[bytes]:
         """ Return a data of the new model (if there is any), or None.
@@ -192,21 +194,3 @@ def get_progress_from_item(item):
         )
     )
     return progress
-
-
-def get_last_valid_jl_items(path: Path, n_last: int) -> List[Dict]:
-    last_lines = get_last_lines(path, n_last + 1)
-    last_items = []
-    for line in last_lines:
-        try:
-            last_items.append(json.loads(line))
-        except Exception:
-            pass
-    return last_items[-n_last:]
-
-
-def get_last_lines(path: Path, n_last: int) -> List[str]:
-    # This is only valid if there are no newlines in items
-    # TODO - more efficient, skip to the end of file
-    with path.open('rt', encoding='utf8') as f:
-        return list(deque(f, maxlen=n_last))

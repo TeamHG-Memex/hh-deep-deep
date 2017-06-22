@@ -6,7 +6,7 @@ import hashlib
 import logging
 import json
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 import zlib
 
 from kafka import KafkaConsumer, KafkaProducer
@@ -53,6 +53,8 @@ class Service:
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
         if self.queue_kind == 'crawler':
+            self.login_output_topic = (
+                '{}dd-login-input'.format(self.queue_prefix))
             self.hints_input_topic = (
                 '{}dd-{}-hints-input'.format(self.queue_prefix, self.queue_kind))
             self.hints_consumer = KafkaConsumer(
@@ -177,7 +179,7 @@ class Service:
                 self.send_stopped_message(process)
             else:
                 updates = process.get_updates()
-                self.send_progress_update(id_, updates)
+                self.send_progress_update(process, updates)
                 if hasattr(process, 'get_new_model'):
                     new_model_data = process.get_new_model()
                     if new_model_data:
@@ -187,18 +189,34 @@ class Service:
         return '{}dd-{}-output-{}'.format(
             self.queue_prefix, self.queue_kind, kind)
 
-    def send_progress_update(self, id_: str, updates):
-        progress, page_sample = updates
+    def send_progress_update(
+            self, process: CrawlProcess, updates: Dict[str, Any]):
+        id_ = process.id_
+        progress = updates.get('progress')
         if progress is not None:
             progress_topic = self.output_topic('progress')
             logging.info('Sending update for "{}" to {}: {}'
                          .format(id_, progress_topic, progress))
             self.send(progress_topic, {'id': id_, 'progress': progress})
+        page_sample = updates.get('pages')
         if page_sample:
             pages_topic = self.output_topic('pages')
             logging.info('Sending {} sample urls for "{}" to {}'
                          .format(len(page_sample), id_, pages_topic))
             self.send(pages_topic, {'id': id_, 'page_sample': page_sample})
+        login_urls = updates.get('login_urls')
+        if login_urls:
+            logging.info(
+                'Sending {} login urls for "{}" to {}'
+                    .format(len(page_sample), id_, self.login_output_topic))
+            for url in login_urls:
+                self.send(self.login_output_topic, {
+                    'workspace_id': process.workspace_id,
+                    'job_id': id_,
+                    'url': url,
+                    'keys': ['login', 'password'],
+                    'screenshot': None,
+                })
 
     def send_model_update(self, id_: str, new_model_data: bytes):
         encoded_model = encode_model_data(new_model_data)

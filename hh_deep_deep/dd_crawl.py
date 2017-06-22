@@ -1,5 +1,4 @@
 from collections import deque
-import json
 import logging
 from pathlib import Path
 import re
@@ -8,7 +7,8 @@ import multiprocessing
 import subprocess
 from typing import Any, Dict, Optional, List
 
-from .crawl_utils import CrawlPaths, CrawlProcess, gen_job_path
+from .crawl_utils import (
+    CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower)
 
 
 class DDCrawlerPaths(CrawlPaths):
@@ -163,12 +163,12 @@ class DDCrawlerProcess(CrawlProcess):
             all_last_items = []
             total_score = n_crawled = n_domains = n_relevant_domains = 0
             for path in log_paths:
-                follower = (
-                    self._log_followers.setdefault(path, JsonLinesFollower(path)))
+                follower = self._log_followers.setdefault(
+                    path, JsonLinesFollower(path))
                 last_items = deque(maxlen=n_last_per_file)
                 for item in follower.get_new_items():
                     if item.get('has_login_form'):
-                        updates.setdefault('logins', []).append(item['url'])
+                        updates.setdefault('login_urls', []).append(item['url'])
                     last_items.append(item)
                 if last_items:
                     all_last_items.extend(last_items)
@@ -203,29 +203,3 @@ class DDCrawlerProcess(CrawlProcess):
     def _compose_call(self, *args):
         subprocess.check_call(
             ['docker-compose'] + list(args), cwd=str(self.paths.root))
-
-
-class JsonLinesFollower:
-    """ Follow json lines file contents: iteration allows to read all new items
-    since last iteration.
-    """
-    def __init__(self, path: Path, encoding='utf8'):
-        self.path = path
-        self.encoding = encoding
-        self.pos = 0
-
-    def get_new_items(self):
-        with self.path.open('rb') as f:
-            f.seek(self.pos)
-            line = ''
-            last_read = True
-            for line in f:
-                try:
-                    yield json.loads(line.decode(self.encoding))
-                except Exception:
-                    last_read = False
-                else:
-                    last_read = True
-            self.pos = f.tell()
-            if not last_read:
-                self.pos -= len(line)
