@@ -2,6 +2,8 @@
 FROM hyperiongray/deep-deep:0.1.2
 # ^^ update hyperiongray/deep-deep-hh as well (image and docker-compose.yml)
 
+COPY xgboost-0.6a2-cp35-none-any.whl .
+RUN pip install xgboost-0.6a2-cp35-none-any.whl
 COPY hh-page-classifier/requirements.txt hh-page-classifier/requirements.txt
 RUN pip install -r ./hh-page-classifier/requirements.txt
 COPY hh-page-classifier hh-page-classifier
