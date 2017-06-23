@@ -10,6 +10,7 @@ from hh_page_clf.model import DefaultModel
 from kafka import KafkaConsumer, KafkaProducer
 import pytest
 
+from hh_deep_deep.crawl_utils import get_domain
 from hh_deep_deep.service import Service, encode_model_data, decode_model_data
 from hh_deep_deep.utils import configure_logging
 
@@ -168,9 +169,10 @@ def _test_crawler_service(
     debug('Sending start crawler message')
     send(crawler_service.input_topic, start_message)
     debug('Sending additional hints')
+    hint_url = start_message['seeds'][1]
     send(crawler_service.hints_input_topic, {
         'workspace_id': start_message['workspace_id'],
-        'url': start_message['seeds'][1],
+        'url': hint_url,
         'pinned': True,
     })
     try:
@@ -181,6 +183,7 @@ def _test_crawler_service(
         assert login_message['job_id'] == start_message['id']
         assert login_message['workspace_id'] == start_message['workspace_id']
         assert login_message['keys'] == ['login', 'password']
+        assert get_domain(login_message['url']) == get_domain(hint_url)
     finally:
         send(crawler_service.input_topic, stop_crawl_message(start_message['id']))
         send(crawler_service.input_topic, {'from-tests': 'stop'})

@@ -5,10 +5,10 @@ import re
 import math
 import multiprocessing
 import subprocess
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Set
 
 from .crawl_utils import (
-    CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower)
+    CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower, get_domain)
 
 
 class DDCrawlerPaths(CrawlPaths):
@@ -38,9 +38,12 @@ class DDCrawlerProcess(CrawlProcess):
         self.page_clf_data = page_clf_data
         self.link_clf_data = link_clf_data
         self.max_workers = max_workers
-        self.hints = hints
         self.broadness = broadness
+        self.initial_hints = hints
+        self._hint_domains = set(map(get_domain, hints))
         self._log_followers = {}  # type: Dict[Path, JsonLinesFollower]
+        self._login_urls = set()  # type: Set[str]
+        self._pending_login_domains = {}  # type: Dict[str, str]
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
@@ -97,7 +100,7 @@ class DDCrawlerProcess(CrawlProcess):
         self.paths.seeds.write_text(
             '\n'.join(url for url in self.seeds), encoding='utf8')
         self.paths.hints.write_text(
-            '\n'.join(url for url in self.hints), encoding='utf8')
+            '\n'.join(url for url in self.initial_hints), encoding='utf8')
         n_processes = multiprocessing.cpu_count()
         if self.max_workers:
             n_processes = min(self.max_workers, n_processes)
@@ -147,6 +150,11 @@ class DDCrawlerProcess(CrawlProcess):
         self.pid = None
 
     def handle_hint(self, url: str, pinned: bool):
+        domain = get_domain(url)
+        if pinned:
+            self._hint_domains.add(domain)
+        else:
+            self._hint_domains.remove(domain)
         self._compose_call(
             'exec', '-T', 'crawler',
             'scrapy', 'hint', 'deepdeep', 'pin' if pinned else 'unpin', url,
@@ -168,7 +176,13 @@ class DDCrawlerProcess(CrawlProcess):
                 last_items = deque(maxlen=n_last_per_file)
                 for item in follower.get_new_items(at_least_last=True):
                     if item.get('has_login_form'):
-                        updates.setdefault('login_urls', []).append(item['url'])
+                        self._login_urls.add(item['url'])
+                        domain = get_domain(item['url'])
+                        if domain in self._hint_domains:
+                            updates.setdefault('login_urls', []).append(item['url'])
+                            self._pending_login_domains.pop(domain, None)
+                        elif domain not in self._pending_login_domains:
+                            self._pending_login_domains[domain] = item['url']
                     last_items.append(item)
                 if last_items:
                     all_last_items.extend(last_items)
@@ -196,6 +210,9 @@ class DDCrawlerProcess(CrawlProcess):
                     ))
         else:
             updates['progress'] = 'Craw is not running yet'
+        for domain in self._hint_domains.intersection(self._pending_login_domains):
+            login_url = self._pending_login_domains.pop(domain)
+            updates.setdefault('login_urls', []).append(login_url)
         return updates
 
     def _compose_call(self, *args):

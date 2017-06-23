@@ -6,6 +6,12 @@ import math
 import time
 from typing import Any, Dict, Optional, List
 
+import tldextract
+
+
+def get_domain(url: str) -> str:
+    return tldextract.extract(url).registered_domain.lower()
+
 
 def gen_job_path(id_: str, root: Path) -> Path:
     return root.joinpath('{}_{}'.format(
