@@ -34,7 +34,10 @@ def clear_topics():
         if service.queue_kind == 'trainer':
             topics.append(service.output_topic('model'))
         if service.queue_kind == 'crawler':
-            topics.append(service.hints_input_topic)
+            topics.extend([
+                service.hints_input_topic,
+                service.login_output_topic,
+            ])
         for topic in topics:
             consumer = KafkaConsumer(topic, consumer_timeout_ms=100,
                                      group_id='{}-group'.format(topic))
@@ -126,6 +129,8 @@ def _test_crawler_service(
         KafkaConsumer(crawler_service.output_topic(kind),
                       value_deserializer=decode_message)
         for kind in ['progress', 'pages']]
+    login_consumer = KafkaConsumer(crawler_service.login_output_topic,
+                                   value_deserializer=decode_message)
     crawler_service_thread = threading.Thread(target=crawler_service.run)
     crawler_service_thread.start()
 
@@ -139,8 +144,14 @@ def _test_crawler_service(
     })
     try:
         progress = _check_progress_pages(progress_consumer, pages_consumer)
-    finally:
         # TODO - check progress message
+        debug('Waiting for login message...')
+        login_message = next(login_consumer)
+        debug('Got login message for {}'.format(login_message['url']))
+        assert login_message['job_id'] == start_message['id']
+        assert login_message['workspace_id'] == start_message['workspace_id']
+        assert login_message['keys'] == ['login', 'password']
+    finally:
         send(crawler_service.input_topic, stop_crawl_message(start_message['id']))
         send(crawler_service.input_topic, {'from-tests': 'stop'})
         crawler_service_thread.join()
