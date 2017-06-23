@@ -6,7 +6,7 @@ import hashlib
 import logging
 import json
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 import zlib
 
 from kafka import KafkaConsumer, KafkaProducer
@@ -44,26 +44,23 @@ class Service:
         self.check_updates_every = check_updates_every
         self.debug = debug
 
-        self.input_topic = (
-            '{}dd-{}-input'.format(self.queue_prefix, self.queue_kind))
-        self.consumer = KafkaConsumer(
+        topic = lambda x: '{}{}'.format(self.queue_prefix, x)
+        self.input_topic = topic('dd-{}-input'.format(self.queue_kind))
+        self.consumer = self._kafka_consumer(
             self.input_topic,
-            group_id='{}-group'.format(self.input_topic),
             consumer_timeout_ms=200,
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
         if self.queue_kind == 'crawler':
-            self.login_output_topic = (
-                '{}dd-login-input'.format(self.queue_prefix))
-            self.hints_input_topic = (
-                '{}dd-{}-hints-input'.format(self.queue_prefix, self.queue_kind))
-            self.hints_consumer = KafkaConsumer(
-                self.hints_input_topic,
-                group_id='{}-group'.format(self.hints_input_topic),
-                consumer_timeout_ms=200,
-                **kafka_kwargs)
+            self.login_output_topic = topic('dd-login-input')
+            self.login_input_topic = topic('dd-login-output')
+            self.login_consumer = self._kafka_consumer(
+                self.login_input_topic, **kafka_kwargs)
+            self.hints_input_topic = topic('dd-crawler-hints-input')
+            self.hints_consumer = self._kafka_consumer(
+                self.hints_input_topic, **kafka_kwargs)
         else:
-            self.hints_consumer = None
+            self.hints_consumer = self.logn_consumer = None
 
         self.producer = KafkaProducer(
             max_request_size=self.max_message_size,
@@ -84,6 +81,12 @@ class Service:
         else:
             logging.info('No crawls running')
 
+    def _kafka_consumer(self, topic, consumer_timeout_ms=10, **kwargs):
+        return KafkaConsumer(
+            topic, group_id='{}-group'.format(topic),
+            consumer_timeout_ms=consumer_timeout_ms,
+            **kwargs)
+
     def run(self) -> None:
         counter = 0
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -102,15 +105,18 @@ class Service:
                         logging.error('Dropping a message in unknown format: {}'
                                       .format(value.keys() if hasattr(value, 'keys')
                                               else type(value)))
-                if self.hints_consumer is not None:
-                    for value in self._read_consumer(self.hints_consumer):
-                        executor.submit(self.handle_hint, value)
+                for value in self._read_consumer(self.hints_consumer):
+                    executor.submit(self.handle_hint, value)
+                for value in self._read_consumer(self.login_consumer):
+                    executor.submit(self.handle_login, value)
                 if counter % self.check_updates_every == 0:
                     executor.submit(self.send_updates)
                 self.producer.flush()
                 self.consumer.commit()
 
     def _read_consumer(self, consumer):
+        if consumer is None:
+            return
         for message in consumer:
             self._debug_save_message(message.value, 'incoming')
             try:
@@ -238,18 +244,34 @@ class Service:
     def handle_hint(self, value: dict):
         workspace_id = value['workspace_id']
         passed = False
-        for process in self.running.values():
+        for process in self.running.values():  # type: DDCrawlerProcess
             if process.workspace_id == workspace_id:
                 passed = True
                 logging.info(
-                    'Pass hint message from workspace "{workspace_id}" to crawl "{id}", '
-                    'pinned={pinned}, url {url}'
+                    'Pass hint message from workspace "{workspace_id}" '
+                    'to crawl "{id}", pinned={pinned}, url {url}'
                     .format(id=process.id_, **value))
                 process.handle_hint(value['url'], value['pinned'])
         if not passed:
             logging.info('Got hint message from workspace "{}", '
                          'but no process from this workspace is running'
                          .format(workspace_id))
+
+    @log_ignore_exception
+    def handle_login(self, value: dict):
+        process = self.running.get(value['job_id'])  # type: DDCrawlerProcess
+        if process is None:
+            logging.info(
+                'Got login message for url {}, but process {} is not running'
+                .format(value['url'], value['job_id']))
+            return
+        logging.info(
+            'Passing login message for url {} to process {}'
+            .format(value['url'], value['job_id']))
+        keys_dict = {}
+        for d in value['key_values']:
+            keys_dict.update(d)
+        process.handle_login(value['url'], keys_dict)
 
     def send(self, topic: str, result: Dict):
         message = json.dumps(result).encode('utf8')

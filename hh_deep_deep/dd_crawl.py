@@ -162,6 +162,9 @@ class DDCrawlerProcess(CrawlProcess):
             '-s', 'LOG_LEVEL=WARNING',
         )
 
+    def handle_login(self, url, keys_dict):
+        pass # TODO
+
     def _get_updates(self) -> Dict[str, Any]:
         n_last = self.get_n_last()
         log_paths = list(self.paths.out.glob('*.log.jl'))
