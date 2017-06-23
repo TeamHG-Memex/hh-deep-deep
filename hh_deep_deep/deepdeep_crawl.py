@@ -155,8 +155,7 @@ class DeepDeepProcess(CrawlProcess):
                 model_progress = 'Warning: no model checkpoints yet.'
             return {'progress': '{} {}'.format(model_progress, item_progress),
                     'pages': pages}
-        else:
-            return {'progress': 'Crawl started, no updates yet'}
+        return {}
 
     def get_new_model(self) -> Optional[bytes]:
         """ Return a data of the new model (if there is any), or None.

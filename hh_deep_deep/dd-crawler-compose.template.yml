@@ -51,6 +51,8 @@ services:
       - PAGE_RELEVANCY_THRESHOLD={relevancy_threshold}
       - -s
       - FILES_STORE=/out/media
+      - -s
+      - AUTOLOGIN_ENABLED=1
     dns:
       - 127.0.0.1
     links:

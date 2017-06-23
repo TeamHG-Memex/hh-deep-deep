@@ -166,7 +166,7 @@ class DDCrawlerProcess(CrawlProcess):
                 follower = self._log_followers.setdefault(
                     path, JsonLinesFollower(path))
                 last_items = deque(maxlen=n_last_per_file)
-                for item in follower.get_new_items():
+                for item in follower.get_new_items(at_least_last=True):
                     if item.get('has_login_form'):
                         updates.setdefault('login_urls', []).append(item['url'])
                     last_items.append(item)
@@ -184,9 +184,7 @@ class DDCrawlerProcess(CrawlProcess):
             updates['pages'] = [
                 {'url': it['url'], 'score': 100 * it['score']}
                 for it in all_last_items[-n_last:]]
-            if n_crawled == 0:
-                updates['progress'] = 'Crawl started, no updates yet'
-            else:
+            if n_crawled > 0:
                 updates['progress'] = (
                     '{n_crawled:,} pages processed from {n_domains:,} domains '
                     '({n_relevant_domains:,} relevant), '

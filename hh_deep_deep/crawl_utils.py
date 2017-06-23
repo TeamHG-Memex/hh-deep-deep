@@ -137,20 +137,29 @@ class JsonLinesFollower:
     def __init__(self, path: Path, encoding='utf8'):
         self.path = path
         self.encoding = encoding
-        self.pos = 0
+        self._pos = 0
+        self._last_item = None
 
-    def get_new_items(self):
+    def get_new_items(self, at_least_last=False):
+        """ Get new items since the file was last read.
+        If at_least_last is True, always try to return at least one item -
+        if there are no new items, yield the last item.
+        """
         with self.path.open('rb') as f:
-            f.seek(self.pos)
+            f.seek(self._pos)
             line = ''
+            any_read = False
             last_read = True
             for line in f:
                 try:
-                    yield json.loads(line.decode(self.encoding))
+                    self._last_item = json.loads(line.decode(self.encoding))
                 except Exception:
                     last_read = False
                 else:
-                    last_read = True
-            self.pos = f.tell()
+                    last_read = any_read = True
+                    yield self._last_item
+            self._pos = f.tell()
             if not last_read:
-                self.pos -= len(line)
+                self._pos -= len(line)
+        if at_least_last and not any_read and self._last_item is not None:
+            yield self._last_item
