@@ -155,15 +155,15 @@ class DDCrawlerProcess(CrawlProcess):
             self._hint_domains.add(domain)
         else:
             self._hint_domains.remove(domain)
-        self._compose_call(
-            'exec', '-T', 'crawler',
-            'scrapy', 'hint', 'deepdeep', 'pin' if pinned else 'unpin', url,
-            '-s', 'REDIS_HOST=redis',
-            '-s', 'LOG_LEVEL=WARNING',
-        )
+        self._scrapy_command('hint', 'pin' if pinned else 'unpin', url)
 
-    def handle_login(self, url, keys_dict):
-        pass # TODO
+    def handle_login(self, url, login, password):
+        self._scrapy_command('login', url, login, password)
+
+    def _scrapy_command(self, command, *args):
+        self._compose_call(
+            'exec', '-T', 'crawler', 'scrapy', command, 'deepdeep', *args,
+            '-s', 'REDIS_HOST=redis', '-s', 'LOG_LEVEL=WARNING')
 
     def _get_updates(self) -> Dict[str, Any]:
         n_last = self.get_n_last()

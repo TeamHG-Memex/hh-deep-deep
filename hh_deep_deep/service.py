@@ -271,7 +271,8 @@ class Service:
         keys_dict = {}
         for d in value['key_values']:
             keys_dict.update(d)
-        process.handle_login(value['url'], keys_dict)
+        process.handle_login(value['url'], login=keys_dict['login'],
+                             password=keys_dict['password'])
 
     def send(self, topic: str, result: Dict):
         message = json.dumps(result).encode('utf8')
