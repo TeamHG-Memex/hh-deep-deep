@@ -268,11 +268,9 @@ class Service:
         logging.info(
             'Passing login message for url {} to process {}'
             .format(value['url'], value['job_id']))
-        keys_dict = {}
-        for d in value['key_values']:
-            keys_dict.update(d)
-        process.handle_login(value['url'], login=keys_dict['login'],
-                             password=keys_dict['password'])
+        params = value['key_values']
+        process.handle_login(value['url'], login=params['login'],
+                             password=params['password'])
 
     def send(self, topic: str, result: Dict):
         message = json.dumps(result).encode('utf8')
