@@ -50,7 +50,6 @@ services:
       - hh-page-clf-service
       - --kafka-host=hh-kafka
       - --random-pages=/models/random-pages.jl.gz
-      - --lda=/models/lda.pkl
 
   tor-proxy:
     image: hyperiongray/tor-proxy:0.1.1

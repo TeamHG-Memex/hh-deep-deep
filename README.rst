@@ -118,7 +118,8 @@ For development, clone the repo and init submodules::
 For production, just get ``docker-compose.yml`` and ``docker-compose.kafka-host.yml``
 from this repo.
 
-Download ``lda.pkl`` and ``random-pages.jl.gz`` from ``s3://darpa-memex/thh/``
+Download ``lda.pkl`` (not used at the moment)
+and ``random-pages.jl.gz`` from ``s3://darpa-memex/thh/``
 and put them to ``./models`` folder::
 
     cd models
