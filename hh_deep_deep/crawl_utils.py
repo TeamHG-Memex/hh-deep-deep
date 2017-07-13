@@ -1,10 +1,16 @@
-from collections import deque
+import json
 import hashlib
 import logging
 from pathlib import Path
 import math
 import time
-from typing import Dict, Optional, List, Tuple
+from typing import Any, Dict, Optional, List
+
+import tldextract
+
+
+def get_domain(url: str) -> str:
+    return tldextract.extract(url).registered_domain.lower()
 
 
 def gen_job_path(id_: str, root: Path) -> Path:
@@ -99,26 +105,16 @@ class CrawlProcess:
     def is_running(self):
         raise NotImplementedError
 
-    def get_updates(self) -> Tuple[Optional[str], Optional[List[Dict]]]:
-        """ Return a tuple of progress update, and a list (possibly empty)
-        of sample crawled urls.
-        If nothing changed from the last time, return None.
+    def get_updates(self) -> Dict[str, Any]:
+        """ Return a dict of updates with a progress message,
+        and possibly a sample of crawled urls, and optionally other items.
         """
-        progress, pages = self._get_updates()
-        if progress == self.last_progress:
-            progress = None
-        else:
-            self.last_progress = progress
-        if pages:
-            page = pages[-1]
-            if self.last_page == page:
-                pages = []
-            else:
-                self.last_page = page
-                self.last_page_time = time.time()
-        return progress, pages
+        updates = self._get_updates()
+        if updates.get('pages'):
+            self.last_page_time = time.time()
+        return updates
 
-    def _get_updates(self) -> Tuple[str, List[Dict]]:
+    def _get_updates(self) -> Dict[str, Any]:
         raise NotImplementedError
 
     def get_n_last(self):
@@ -140,8 +136,36 @@ class CrawlProcess:
         return self.host_root.joinpath(rel_path)
 
 
-def get_last_lines(path: Path, n_last: int) -> List[str]:
-    # This is only valid if there are no newlines in items
-    # TODO - more efficient, skip to the end of file
-    with path.open('rt', encoding='utf8') as f:
-        return list(deque(f, maxlen=n_last))
+class JsonLinesFollower:
+    """ Follow json lines file contents: iteration allows to read all new items
+    since last iteration.
+    """
+    def __init__(self, path: Path, encoding='utf8'):
+        self.path = path
+        self.encoding = encoding
+        self._pos = 0
+        self._last_item = None
+
+    def get_new_items(self, at_least_last=False):
+        """ Get new items since the file was last read.
+        If at_least_last is True, always try to return at least one item -
+        if there are no new items, yield the last item.
+        """
+        with self.path.open('rb') as f:
+            f.seek(self._pos)
+            line = ''
+            any_read = False
+            last_read = True
+            for line in f:
+                try:
+                    self._last_item = json.loads(line.decode(self.encoding))
+                except Exception:
+                    last_read = False
+                else:
+                    last_read = any_read = True
+                    yield self._last_item
+            self._pos = f.tell()
+            if not last_read:
+                self._pos -= len(line)
+        if at_least_last and not any_read and self._last_item is not None:
+            yield self._last_item

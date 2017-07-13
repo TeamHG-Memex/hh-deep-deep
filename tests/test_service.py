@@ -2,6 +2,7 @@ import json
 import logging
 import threading
 import time
+from pathlib import Path
 import pickle
 from typing import Dict, Callable, List
 
@@ -9,6 +10,7 @@ from hh_page_clf.model import DefaultModel
 from kafka import KafkaConsumer, KafkaProducer
 import pytest
 
+from hh_deep_deep.crawl_utils import get_domain
 from hh_deep_deep.service import Service, encode_model_data, decode_model_data
 from hh_deep_deep.utils import configure_logging
 
@@ -24,31 +26,44 @@ class ATestService(Service):
     jobs_prefix = 'tests'
 
 
-def clear_topics():
-    for service in [ATestService('trainer'), ATestService('crawler')]:
-        topics = [
-            service.input_topic,
-            service.output_topic('progress'),
-            service.output_topic('pages'),
-        ]
-        if service.queue_kind == 'trainer':
-            topics.append(service.output_topic('model'))
-        if service.queue_kind == 'crawler':
-            topics.append(service.hints_input_topic)
-        for topic in topics:
-            consumer = KafkaConsumer(topic, consumer_timeout_ms=100,
-                                     group_id='{}-group'.format(topic))
-            for _ in consumer:
-                pass
-            consumer.commit()
+def clear_topics(service):
+    topics = [
+        service.input_topic,
+        service.output_topic('progress'),
+        service.output_topic('pages'),
+    ]
+    if service.queue_kind == 'trainer':
+        topics.append(service.output_topic('model'))
+    if service.queue_kind == 'crawler':
+        topics.extend([
+            service.hints_input_topic,
+        ])
+    for topic in topics:
+        consumer = KafkaConsumer(topic, consumer_timeout_ms=100,
+                                 group_id='{}-group'.format(topic))
+        for _ in consumer:
+            pass
+        consumer.commit()
+
+
+@pytest.mark.slow
+def test_service_deepdeep():
+    _test_service(run_deepdeep=True, run_dd_crawl=False)
+
+
+@pytest.mark.slow
+def test_service_dd_crawl():
+    _test_service(run_deepdeep=False, run_dd_crawl=True)
 
 
 @pytest.mark.slow
 def test_service():
+    _test_service(run_deepdeep=True, run_dd_crawl=True)
+
+
+def _test_service(run_deepdeep, run_dd_crawl):
     # This is a big integration test, better run with "-s"
 
-    debug('Clearing topics')
-    clear_topics()
     job_id = 'test-id'
     ws_id = 'test-ws-id'
     producer = KafkaProducer(value_serializer=encode_message)
@@ -57,9 +72,28 @@ def test_service():
         producer.send(topic, message).get()
         producer.flush()
 
-    start_crawler_message = _test_trainer_service(job_id, ws_id, send)
+    start_crawler_message = None
+    start_message_path = Path('.tst.start-deepdeep.pkl')
+    if not run_deepdeep:
+        if start_message_path.exists():
+            with start_message_path.open('rb') as f:
+                start_crawler_message = pickle.load(f)
+                debug('Loaded cached start dd_crawl message')
+        else:
+            debug('No cached start dd_crawl message found, must run deepdeep')
+            run_deepdeep = True
+    if run_deepdeep:
+        debug('Clearing deep-deep topics')
+        clear_topics(ATestService('trainer'))
+        start_crawler_message = _test_trainer_service(job_id, ws_id, send)
+        with start_message_path.open('wb') as f:
+            pickle.dump(start_crawler_message, f)
+    assert start_crawler_message is not None
 
-    _test_crawler_service(start_crawler_message, send)
+    if run_dd_crawl:
+        debug('Clearing dd-crawl topics')
+        clear_topics(ATestService('crawler'))
+        _test_crawler_service(start_crawler_message, send)
 
 
 def _test_trainer_service(job_id: str, ws_id: str,
