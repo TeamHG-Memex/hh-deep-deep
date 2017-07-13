@@ -42,6 +42,8 @@ class DDCrawlerProcess(CrawlProcess):
         self.initial_hints = hints
         self._hint_domains = set(map(get_domain, hints))
         self._log_followers = {}  # type: Dict[Path, JsonLinesFollower]
+        self._login_urls = set()  # type: Set[str]
+        self._pending_login_domains = {}  # type: Dict[str, str]
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
@@ -155,6 +157,9 @@ class DDCrawlerProcess(CrawlProcess):
             self._hint_domains.remove(domain)
         self._scrapy_command('hint', 'pin' if pinned else 'unpin', url)
 
+    def handle_login(self, url, login, password):
+        self._scrapy_command('login', url, login, password)
+
     def _scrapy_command(self, command, *args):
         self._compose_call(
             'exec', '-T', 'crawler', 'scrapy', command, 'deepdeep', *args,
@@ -173,6 +178,14 @@ class DDCrawlerProcess(CrawlProcess):
                     path, JsonLinesFollower(path))
                 last_items = deque(maxlen=n_last_per_file)
                 for item in follower.get_new_items(at_least_last=True):
+                    if item.get('has_login_form'):
+                        self._login_urls.add(item['url'])
+                        domain = get_domain(item['url'])
+                        if domain in self._hint_domains:
+                            updates.setdefault('login_urls', []).append(item['url'])
+                            self._pending_login_domains.pop(domain, None)
+                        elif domain not in self._pending_login_domains:
+                            self._pending_login_domains[domain] = item['url']
                     last_items.append(item)
                 if last_items:
                     all_last_items.extend(last_items)

@@ -52,11 +52,15 @@ class Service:
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
         if self.queue_kind == 'crawler':
+            self.login_output_topic = topic('dd-login-input')
+            self.login_input_topic = topic('dd-login-output')
+            self.login_consumer = self._kafka_consumer(
+                self.login_input_topic, **kafka_kwargs)
             self.hints_input_topic = topic('dd-crawler-hints-input')
             self.hints_consumer = self._kafka_consumer(
                 self.hints_input_topic, **kafka_kwargs)
         else:
-            self.hints_consumer = None
+            self.hints_consumer = self.logn_consumer = None
 
         self.producer = KafkaProducer(
             max_request_size=self.max_message_size,
@@ -103,6 +107,8 @@ class Service:
                                               else type(value)))
                 for value in self._read_consumer(self.hints_consumer):
                     executor.submit(self.handle_hint, value)
+                for value in self._read_consumer(self.login_consumer):
+                    executor.submit(self.handle_login, value)
                 if counter % self.check_updates_every == 0:
                     executor.submit(self.send_updates)
                 self.producer.flush()
@@ -204,6 +210,19 @@ class Service:
             logging.info('Sending {} sample urls for "{}" to {}'
                          .format(len(page_sample), id_, pages_topic))
             self.send(pages_topic, {'id': id_, 'page_sample': page_sample})
+        login_urls = updates.get('login_urls')
+        if login_urls:
+            logging.info(
+                'Sending {} login urls for "{}" to {}'
+                    .format(len(page_sample), id_, self.login_output_topic))
+            for url in login_urls:
+                self.send(self.login_output_topic, {
+                    'workspace_id': process.workspace_id,
+                    'job_id': id_,
+                    'url': url,
+                    'keys': ['login', 'password'],
+                    'screenshot': None,
+                })
 
     def send_model_update(self, id_: str, new_model_data: bytes):
         encoded_model = encode_model_data(new_model_data)
@@ -237,6 +256,21 @@ class Service:
             logging.info('Got hint message from workspace "{}", '
                          'but no process from this workspace is running'
                          .format(workspace_id))
+
+    @log_ignore_exception
+    def handle_login(self, value: dict):
+        process = self.running.get(value['job_id'])  # type: DDCrawlerProcess
+        if process is None:
+            logging.info(
+                'Got login message for url {}, but process {} is not running'
+                .format(value['url'], value['job_id']))
+            return
+        logging.info(
+            'Passing login message for url {} to process {}'
+            .format(value['url'], value['job_id']))
+        params = value['key_values']
+        process.handle_login(value['url'], login=params['login'],
+                             password=params['password'])
 
     def send(self, topic: str, result: Dict):
         message = json.dumps(result).encode('utf8')
