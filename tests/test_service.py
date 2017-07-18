@@ -6,7 +6,7 @@ from pathlib import Path
 import pickle
 from typing import Dict, Callable, List
 
-from hh_page_clf.model import DefaultModel
+from hh_page_clf.models import DefaultModel
 from kafka import KafkaConsumer, KafkaProducer
 import pytest
 
