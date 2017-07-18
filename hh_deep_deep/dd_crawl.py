@@ -40,6 +40,7 @@ class DDCrawlerProcess(CrawlProcess):
         self.max_workers = max_workers
         self.broadness = broadness
         self.initial_hints = hints
+        self.page_limit = self.page_limit or 10000000
         self._hint_domains = set(map(get_domain, hints))
         self._log_followers = {}  # type: Dict[Path, JsonLinesFollower]
 
@@ -102,14 +103,13 @@ class DDCrawlerProcess(CrawlProcess):
         n_processes = multiprocessing.cpu_count()
         if self.max_workers:
             n_processes = min(self.max_workers, n_processes)
-        page_limit = self.page_limit or 10000000
         cur_dir = Path(__file__).parent  # type: Path
         compose_templates = (
             cur_dir.joinpath('dd-crawler-compose.template.yml').read_text())
         self.paths.root.joinpath('docker-compose.yml').write_text(
             compose_templates.format(
                 docker_image=self.docker_image,
-                page_limit=int(math.ceil(page_limit / n_processes)),
+                page_limit=int(math.ceil(self.page_limit / n_processes)),
                 max_relevant_domains=self._max_relevant_domains(self.broadness),
                 relevancy_threshold=0.8,  # just a heuristics
                 external_links=('["{}:proxy"]'.format(self.proxy_container)
@@ -198,6 +198,7 @@ class DDCrawlerProcess(CrawlProcess):
                         n_relevant_domains=n_relevant_domains,
                         mean_score=100 * total_score / n_crawled,
                     ))
+                updates['percentage_done'] = 100 * n_crawled / self.page_limit
         else:
             updates['progress'] = 'Craw is not running yet'
         return updates

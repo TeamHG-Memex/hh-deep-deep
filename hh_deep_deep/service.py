@@ -197,7 +197,11 @@ class Service:
             progress_topic = self.output_topic('progress')
             logging.info('Sending update for "{}" to {}: {}'
                          .format(id_, progress_topic, progress))
-            self.send(progress_topic, {'id': id_, 'progress': progress})
+            self.send(progress_topic, {
+                'id': id_,
+                'progress': progress,
+                'percentage_done': updates.get('percentage_done', 0.),
+            })
         page_sample = updates.get('pages')
         if page_sample:
             pages_topic = self.output_topic('pages')

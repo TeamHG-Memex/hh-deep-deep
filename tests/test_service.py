@@ -194,6 +194,8 @@ def check_progress(message):
         assert 'domains' in progress
         assert 'relevant' in progress
         assert 'average score' in progress.lower()
+        debug('percentage_done', value['percentage_done'])
+        assert 0 <= value['percentage_done'] <= 100
         return progress
 
 
