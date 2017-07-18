@@ -200,9 +200,6 @@ class DDCrawlerProcess(CrawlProcess):
                     ))
         else:
             updates['progress'] = 'Craw is not running yet'
-        for domain in self._hint_domains.intersection(self._pending_login_domains):
-            login_url = self._pending_login_domains.pop(domain)
-            updates.setdefault('login_urls', []).append(login_url)
         return updates
 
     def _compose_call(self, *args):
