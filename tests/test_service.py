@@ -189,7 +189,7 @@ def check_progress(message):
     assert value['id'] == 'test-id'
     progress = value['progress']
     if progress not in {
-            'Craw is not running yet', 'Crawl started, no updates yet'}:
+            'Crawl is not running yet', 'Crawl started, no updates yet'}:
         assert 'pages processed' in progress
         assert 'domains' in progress
         assert 'relevant' in progress

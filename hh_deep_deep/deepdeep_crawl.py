@@ -141,7 +141,7 @@ class DeepDeepProcess(CrawlProcess):
 
     def _get_updates(self) -> Dict[str, Any]:
         if not self.paths.items.exists():
-            return {'progress': 'Craw is not running yet'}
+            return {'progress': 'Crawl is not running yet'}
         n_last = self.get_n_last()
         last_items = deque(self.log_follower.get_new_items(), maxlen=n_last)
         if last_items:

@@ -200,7 +200,7 @@ class DDCrawlerProcess(CrawlProcess):
                     ))
                 updates['percentage_done'] = 100 * n_crawled / self.page_limit
         else:
-            updates['progress'] = 'Craw is not running yet'
+            updates['progress'] = 'Crawl is not running yet'
         return updates
 
     def _compose_call(self, *args):
