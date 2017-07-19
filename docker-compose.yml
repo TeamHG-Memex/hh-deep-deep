@@ -4,7 +4,7 @@ version: '2.1'
 services:
 
   hh-trainer:
-    image: hyperiongray/hh-deep-deep:autologin-v1  # update below too!
+    image: hyperiongray/hh-deep-deep:autologin-v2  # update below too!
     restart: always
     depends_on:
       hh-kafka:
@@ -21,7 +21,7 @@ services:
       - --proxy-container=hh-deep-deep-tor-proxy
 
   hh-crawler:
-    image: hyperiongray/hh-deep-deep:autologin-v1
+    image: hyperiongray/hh-deep-deep:autologin-v2
     restart: always
     depends_on:
       hh-kafka:
@@ -39,7 +39,7 @@ services:
       - --proxy-container=hh-deep-deep-tor-proxy
 
   hh-modeler:
-    image: hyperiongray/hh-page-clf:0.4.3  # update git submodule too
+    image: hyperiongray/hh-page-clf:0.4.6  # update git submodule too
     restart: always
     depends_on:
       hh-kafka:

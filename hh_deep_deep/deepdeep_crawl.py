@@ -141,11 +141,12 @@ class DeepDeepProcess(CrawlProcess):
 
     def _get_updates(self) -> Dict[str, Any]:
         if not self.paths.items.exists():
-            return {'progress': 'Craw is not running yet'}
+            return {'progress': 'Crawl is not running yet'}
         n_last = self.get_n_last()
         last_items = deque(self.log_follower.get_new_items(), maxlen=n_last)
         if last_items:
-            item_progress = get_progress_from_item(last_items[-1])
+            last_item = last_items[-1]
+            item_progress = get_progress_from_item(last_item)
             pages = [get_sample_from_item(item) for item in last_items
                      if 'url' in item]
             if self.last_model_file:
@@ -154,7 +155,9 @@ class DeepDeepProcess(CrawlProcess):
             else:
                 model_progress = 'Warning: no model checkpoints yet.'
             return {'progress': '{} {}'.format(model_progress, item_progress),
-                    'pages': pages}
+                    'pages': pages,
+                    'percentage_done': get_percentage_done_from_item(last_item),
+                    }
         return {}
 
     def get_new_model(self) -> Optional[bytes]:
@@ -193,3 +196,8 @@ def get_progress_from_item(item):
         )
     )
     return progress
+
+
+def get_percentage_done_from_item(item):
+    done_n_pages = 5000  # some arbitrary number that should get ok results
+    return 100 * item.get('processed') / done_n_pages

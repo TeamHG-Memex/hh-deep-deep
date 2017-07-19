@@ -1,1 +1,2 @@
 kafka-python==1.3.3
+tldextract==2.0.2

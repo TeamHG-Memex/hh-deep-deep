@@ -199,11 +199,13 @@ def check_progress(message):
     assert value['id'] == 'test-id'
     progress = value['progress']
     if progress not in {
-            'Craw is not running yet', 'Crawl started, no updates yet'}:
+            'Crawl is not running yet', 'Crawl started, no updates yet'}:
         assert 'pages processed' in progress
         assert 'domains' in progress
         assert 'relevant' in progress
         assert 'average score' in progress.lower()
+        debug('percentage_done', value['percentage_done'])
+        assert 0 <= value['percentage_done'] <= 100
         return progress
 
 

@@ -8,6 +8,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'kafka-python==1.3.3',
+        'tldextract',
     ],
     entry_points = {
         'console_scripts': [
