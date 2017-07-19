@@ -179,13 +179,7 @@ class DDCrawlerProcess(CrawlProcess):
                 last_items = deque(maxlen=n_last_per_file)
                 for item in follower.get_new_items(at_least_last=True):
                     if item.get('has_login_form'):
-                        self._login_urls.add(item['url'])
-                        domain = get_domain(item['url'])
-                        if domain in self._hint_domains:
-                            updates.setdefault('login_urls', []).append(item['url'])
-                            self._pending_login_domains.pop(domain, None)
-                        elif domain not in self._pending_login_domains:
-                            self._pending_login_domains[domain] = item['url']
+                        self._handle_found_login_form(item, updates)
                     last_items.append(item)
                 if last_items:
                     all_last_items.extend(last_items)
@@ -214,10 +208,20 @@ class DDCrawlerProcess(CrawlProcess):
                 updates['percentage_done'] = 100 * n_crawled / self.page_limit
         else:
             updates['progress'] = 'Crawl is not running yet'
-        for domain in self._hint_domains.intersection(self._pending_login_domains):
+        for domain in (self._hint_domains & set(self._pending_login_domains)):
             login_url = self._pending_login_domains.pop(domain)
             updates.setdefault('login_urls', []).append(login_url)
         return updates
+
+    def _handle_found_login_form(self, item, updates):
+        self._login_urls.add(item['url'])
+        domain = get_domain(item['url'])
+        if domain in self._hint_domains:
+            login_urls = updates.setdefault('login_urls', [])
+            login_urls.append(item['url'])
+            self._pending_login_domains.pop(domain, None)
+        elif domain not in self._pending_login_domains:
+            self._pending_login_domains[domain] = item['url']
 
     def _compose_call(self, *args):
         subprocess.check_call(
