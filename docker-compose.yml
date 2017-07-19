@@ -39,7 +39,7 @@ services:
       - --proxy-container=hh-deep-deep-tor-proxy
 
   hh-modeler:
-    image: hyperiongray/hh-page-clf:0.4.5  # update git submodule too
+    image: hyperiongray/hh-page-clf:0.4.6  # update git submodule too
     restart: always
     depends_on:
       hh-kafka:
