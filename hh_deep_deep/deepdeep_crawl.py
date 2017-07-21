@@ -28,7 +28,8 @@ class DeepDeepProcess(CrawlProcess):
                  **kwargs):
         super().__init__(**kwargs)
         self.page_limit = self.page_limit or 10000
-        self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
+        self.paths = DeepDeepPaths(
+            root or gen_job_path(self.id_, self.jobs_root))
         self.log_follower = JsonLinesFollower(self.paths.items)
         self.page_clf_data = page_clf_data
         self.checkpoint_interval = checkpoint_interval
@@ -40,9 +41,8 @@ class DeepDeepProcess(CrawlProcess):
         """ Initialize a process from a directory.
         """
         paths = DeepDeepPaths(root)
-        if not all(p.exists() for p in [
-                paths.pid, paths.id, paths.seeds, paths.page_clf, paths.workspace_id,
-                ]):
+        if not all(p.exists() for p in [paths.pid, paths.id, paths.seeds,
+                                        paths.page_clf, paths.workspace_id]):
             return
         pid = paths.pid.read_text()
         if not cls._is_running(pid):
@@ -88,12 +88,14 @@ class DeepDeepProcess(CrawlProcess):
         docker_args = [
             'docker', 'run', '-d',
             '-v', '{}:{}'.format(self.to_host_path(self.paths.root), '/job'),
-            '-v', '{}:{}'.format(self.to_host_path(self.paths.models), '/models'),
+            '-v', '{}:{}'.format(
+                self.to_host_path(self.paths.models), '/models'),
             '--network', 'bridge',
         ]
         proxy = 'http://proxy:8118'
         if self.proxy_container:
-            docker_args.extend(['--link', '{}:proxy'.format(self.proxy_container)])
+            docker_args.extend(
+                ['--link', '{}:proxy'.format(self.proxy_container)])
         docker_args.append(self.docker_image)
         args = docker_args + [
             'scrapy', 'crawl', 'relevant',
