@@ -6,7 +6,7 @@ import hashlib
 import logging
 import json
 import time
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Optional
 import zlib
 
 from kafka import KafkaConsumer, KafkaProducer
@@ -102,9 +102,10 @@ class Service:
                     elif 'id' in value and value.get('stop'):
                         executor.submit(self.stop_crawl, value)
                     else:
-                        logging.error('Dropping a message in unknown format: {}'
-                                      .format(value.keys() if hasattr(value, 'keys')
-                                              else type(value)))
+                        logging.error(
+                            'Dropping a message in unknown format: {}'
+                            .format(value.keys() if hasattr(value, 'keys')
+                                    else type(value)))
                 for value in self._read_consumer(self.hints_consumer):
                     executor.submit(self.handle_hint, value)
                 for value in self._read_consumer(self.login_consumer):
@@ -139,7 +140,8 @@ class Service:
                 rest=', link model size {:,}'.format(len(request['link_model']))
                      if request.get('link_model') else '',
             ))
-        # stop all running processes for this workspace (should be at most 1 usually)
+        # stop all running processes for this workspace
+        # (should be at most 1 usually)
         for p_id, process in list(self.running.items()):
             if process.workspace_id == workspace_id:
                 logging.info('Stopping old process {} for workspace {}'
@@ -152,14 +154,15 @@ class Service:
         kwargs['page_clf_data'] = decode_model_data(request['page_model'])
         if 'link_model' in request:
             kwargs['link_clf_data'] = decode_model_data(request['link_model'])
-        kwargs.update({
-            field: request[field] for field in ['page_limit', 'hints', 'broadness']
-            if field in request})
+        kwargs.update({field: request[field]
+                       for field in ['page_limit', 'hints', 'broadness']
+                       if field in request})
         if 'page_limit' in request:
             kwargs['page_limit'] = request['page_limit']
         if 'hints' in request:
             kwargs['hints'] = request['hints']
-        process = self.process_class(id_=id_, workspace_id=workspace_id, **kwargs)
+        process = self.process_class(
+            id_=id_, workspace_id=workspace_id, **kwargs)
         process.start()
         self.running[id_] = process
 

@@ -27,7 +27,9 @@ class DeepDeepProcess(CrawlProcess):
                  checkpoint_interval: int=1000,
                  **kwargs):
         super().__init__(**kwargs)
-        self.paths = DeepDeepPaths(root or gen_job_path(self.id_, self.jobs_root))
+        self.page_limit = self.page_limit or 10000
+        self.paths = DeepDeepPaths(
+            root or gen_job_path(self.id_, self.jobs_root))
         self.log_follower = JsonLinesFollower(self.paths.items)
         self.page_clf_data = page_clf_data
         self.checkpoint_interval = checkpoint_interval
@@ -39,9 +41,8 @@ class DeepDeepProcess(CrawlProcess):
         """ Initialize a process from a directory.
         """
         paths = DeepDeepPaths(root)
-        if not all(p.exists() for p in [
-                paths.pid, paths.id, paths.seeds, paths.page_clf, paths.workspace_id,
-                ]):
+        if not all(p.exists() for p in [paths.pid, paths.id, paths.seeds,
+                                        paths.page_clf, paths.workspace_id]):
             return
         pid = paths.pid.read_text()
         if not cls._is_running(pid):
@@ -84,16 +85,17 @@ class DeepDeepProcess(CrawlProcess):
         self.paths.page_clf.write_bytes(self.page_clf_data)
         with self.paths.seeds.open('wt', encoding='utf8') as f:
             csv.writer(f).writerows([url] for url in self.seeds)
-        page_limit = self.page_limit or 200000
         docker_args = [
             'docker', 'run', '-d',
             '-v', '{}:{}'.format(self.to_host_path(self.paths.root), '/job'),
-            '-v', '{}:{}'.format(self.to_host_path(self.paths.models), '/models'),
+            '-v', '{}:{}'.format(
+                self.to_host_path(self.paths.models), '/models'),
             '--network', 'bridge',
         ]
         proxy = 'http://proxy:8118'
         if self.proxy_container:
-            docker_args.extend(['--link', '{}:proxy'.format(self.proxy_container)])
+            docker_args.extend(
+                ['--link', '{}:proxy'.format(self.proxy_container)])
         docker_args.append(self.docker_image)
         args = docker_args + [
             'scrapy', 'crawl', 'relevant',
@@ -106,7 +108,7 @@ class DeepDeepProcess(CrawlProcess):
             '-a', 'export_cdr=0',
             '--logfile', '/job/spider.log',
             '-L', 'INFO',
-            '-s', 'CLOSESPIDER_ITEMCOUNT={}'.format(page_limit),
+            '-s', 'CLOSESPIDER_ITEMCOUNT={}'.format(self.page_limit),
         ]
         if self.proxy_container:
             args.extend([
@@ -156,7 +158,8 @@ class DeepDeepProcess(CrawlProcess):
                 model_progress = 'Warning: no model checkpoints yet.'
             return {'progress': '{} {}'.format(model_progress, item_progress),
                     'pages': pages,
-                    'percentage_done': get_percentage_done_from_item(last_item),
+                    'percentage_done': (
+                        100 * last_item.get('processed') / self.page_limit),
                     }
         return {}
 
@@ -196,8 +199,3 @@ def get_progress_from_item(item):
         )
     )
     return progress
-
-
-def get_percentage_done_from_item(item):
-    done_n_pages = 5000  # some arbitrary number that should get ok results
-    return 100 * item.get('processed') / done_n_pages
