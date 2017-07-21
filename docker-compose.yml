@@ -4,7 +4,7 @@ version: '2.1'
 services:
 
   hh-trainer:
-    image: hyperiongray/hh-deep-deep:0.2.1  # update below too!
+    image: hyperiongray/hh-deep-deep:0.2.2  # update below too!
     restart: always
     depends_on:
       hh-kafka:
@@ -21,7 +21,7 @@ services:
       - --proxy-container=hh-deep-deep-tor-proxy
 
   hh-crawler:
-    image: hyperiongray/hh-deep-deep:0.2.1
+    image: hyperiongray/hh-deep-deep:0.2.2
     restart: always
     depends_on:
       hh-kafka:
