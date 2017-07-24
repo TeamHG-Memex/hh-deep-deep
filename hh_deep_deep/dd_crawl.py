@@ -1,4 +1,5 @@
 from collections import deque
+import json
 import logging
 from pathlib import Path
 import re
@@ -78,13 +79,25 @@ class DDCrawlerProcess(CrawlProcess):
             **kwargs)
 
     @staticmethod
-    def _is_running(root: Path):
-        running_containers = (
-            subprocess.check_output(['docker-compose', 'ps', '-q'], cwd=str(root))
-            .decode('utf8').strip().split('\n'))
-        # Only one container is not normal,
-        # should be at least redis and one crawler.
-        return len(running_containers) >= 2
+    def _is_running(root: Path) -> bool:
+        running_containers = list(filter(
+            None,
+            subprocess
+            .check_output(['docker-compose', 'ps', '-q'], cwd=str(root))
+            .decode('utf8').strip().split('\n')))
+        crawl_running = 0  # only really running crawlers
+        for cid in running_containers:
+            try:
+                output = json.loads(subprocess.check_output(
+                    ['docker', 'inspect', cid]).decode('utf-8'))
+            except (subprocess.CalledProcessError, ValueError):
+                pass
+            else:
+                if len(output) == 1:
+                    meta = output[0]
+                    if 'crawler' in meta.get('Name', ''):
+                        crawl_running += meta.get('State', {}).get('Running')
+        return crawl_running > 0
 
     def is_running(self):
         return self.pid is not None and self._is_running(self.paths.root)
