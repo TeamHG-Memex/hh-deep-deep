@@ -53,7 +53,16 @@ services:
       - FILES_STORE=/out/media
       - -s
       - AUTOLOGIN_ENABLED=1
+      - -s
+      - AUTOLOGIN_URL=http://autologin:8089
     dns:
       - 127.0.0.1
     links:
       - redis
+      - autologin
+
+  autologin:
+    image: hyperiongray/autologin:multidomain  # FIXME - freeze
+    network_mode: bridge
+    expose:
+      - "8089"
