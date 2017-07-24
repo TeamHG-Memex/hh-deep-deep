@@ -1,5 +1,5 @@
 # FROM deep-deep
-FROM hyperiongray/deep-deep:0.1.1
+FROM hyperiongray/deep-deep:0.1.2
 # ^^ update hyperiongray/deep-deep-hh as well (image and docker-compose.yml)
 
 COPY hh-page-classifier/requirements.txt hh-page-classifier/requirements.txt

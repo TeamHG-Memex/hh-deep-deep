@@ -40,7 +40,7 @@ services:
       - -a
       - classifier_input=text_url
       - -s
-      - CLOSESPIDER_ITEMCOUNT={page_limit}
+      - CLOSESPIDER_PAGECOUNT={page_limit}
       - -s
       - HTTP_PROXY={proxy}
       - -s
