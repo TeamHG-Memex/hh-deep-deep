@@ -16,7 +16,7 @@ services:
       - hh-deep-deep-service
       - trainer
       - --kafka-host=hh-kafka
-      - --docker-image=hyperiongray/deep-deep-hh:0.1.2
+      - --docker-image=hyperiongray/deep-deep-hh:0.1.3
       - --host-root=${PWD}
       - --proxy-container=hh-deep-deep-tor-proxy
 

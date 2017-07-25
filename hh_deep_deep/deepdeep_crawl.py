@@ -108,7 +108,7 @@ class DeepDeepProcess(CrawlProcess):
             '-a', 'export_cdr=0',
             '--logfile', '/job/spider.log',
             '-L', 'INFO',
-            '-s', 'CLOSESPIDER_ITEMCOUNT={}'.format(self.page_limit),
+            '-s', 'CLOSESPIDER_PAGECOUNT={}'.format(self.page_limit),
         ]
         if self.proxy_container:
             args.extend([
@@ -159,7 +159,8 @@ class DeepDeepProcess(CrawlProcess):
             return {'progress': '{} {}'.format(model_progress, item_progress),
                     'pages': pages,
                     'percentage_done': (
-                        100 * last_item.get('processed') / self.page_limit),
+                        100 * last_item.get('response_received_count', 0) /
+                        self.page_limit),
                     }
         return {}
 
@@ -192,7 +193,7 @@ def get_progress_from_item(item):
         '{pages:,} pages processed from {crawled_domains:,} domains '
         '({relevant_domains:,} relevant domains).'
         .format(
-            pages=item.get('processed', 0),
+            pages=item.get('response_received_count', 0),
             crawled_domains=item.get('crawled_domains', 0),
             relevant_domains=item.get('relevant_domains', 0),
             score=(100 * item['return'] / item['t']) if item.get('t') else 0,
