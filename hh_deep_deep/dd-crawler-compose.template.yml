@@ -62,7 +62,7 @@ services:
       - autologin
 
   autologin:
-    image: hyperiongray/autologin:multidomain  # FIXME - freeze
+    image: hyperiongray/autologin:0.1.4
     network_mode: bridge
     expose:
       - "8089"
