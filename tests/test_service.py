@@ -177,6 +177,12 @@ def _test_crawler_service(
     })
     try:
         _check_progress_pages(progress_consumer, pages_consumer)
+        send(crawler_service.login_input_topic, {
+            'job_id': start_message['id'],
+            'url': 'http://news.ycombinator.com',
+            'login': 'invalid',
+            'password': 'invalid',
+        })
         debug('Waiting for login message...')
         login_message = next(login_consumer).value
         debug('Got login message for {}'.format(login_message['url']))
