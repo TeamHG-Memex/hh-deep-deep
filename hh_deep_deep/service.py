@@ -60,7 +60,7 @@ class Service:
             self.hints_consumer = self._kafka_consumer(
                 self.hints_input_topic, **kafka_kwargs)
         else:
-            self.hints_consumer = self.logn_consumer = None
+            self.hints_consumer = self.login_consumer = None
 
         self.producer = KafkaProducer(
             max_request_size=self.max_message_size,
