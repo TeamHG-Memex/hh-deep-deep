@@ -219,10 +219,9 @@ class Service:
             self.send(pages_topic, {'id': id_, 'page_sample': page_sample})
         login_urls = updates.get('login_urls')
         if login_urls:
-            logging.info(
-                'Sending {} login urls for "{}" to {}'
-                    .format(len(page_sample), id_, self.login_output_topic))
             for url in login_urls:
+                logging.info('Sending login url for "{}" to {}: {}'
+                             .format(id_, self.login_output_topic, url))
                 self.send(self.login_output_topic, {
                     'workspace_id': process.workspace_id,
                     'job_id': id_,
