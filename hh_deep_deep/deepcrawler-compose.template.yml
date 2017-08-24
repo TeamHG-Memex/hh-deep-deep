@@ -1,0 +1,41 @@
+version: '2'
+
+
+volumes:
+  redis-data: {{}}
+
+
+services:
+
+  redis:
+    image: redis:3.0
+    network_mode: bridge
+    volumes:
+      - redis-data:/data
+      - {redis_conf}:/usr/local/etc/redis/redis.conf
+    command: [redis-server, /usr/local/etc/redis/redis.conf]
+
+  crawler:
+    image: {docker_image}
+    external_links: {external_links}
+    network_mode: bridge
+    volumes:
+      - {seeds}:/dd_crawler/seeds.txt
+      - {out}:/out
+    entrypoint:
+      - /dd_crawler/docker/crawl.sh
+      - deepdeep  # FIXME
+      - -a
+      - seeds=/dd_crawler/seeds.txt
+      - -s
+      - CLOSESPIDER_ITEMCOUNT={page_limit}
+      - -s
+      - HTTP_PROXY={proxy}
+      - -s
+      - HTTPS_PROXY={proxy}
+      - -s
+      - FILES_STORE=/out/media
+    dns:
+      - 127.0.0.1
+    links:
+      - redis

@@ -1,5 +1,4 @@
 from collections import deque
-import json
 import logging
 from pathlib import Path
 import re
@@ -8,8 +7,8 @@ import multiprocessing
 import subprocess
 from typing import Any, Dict, Optional, List
 
-from .crawl_utils import (
-    CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower, get_domain)
+from .crawl_utils import CrawlPaths, JsonLinesFollower, get_domain
+from .dd_utils import BaseDDCrawlerProcess, is_running
 
 
 # TODO - likely, hints must be removed
@@ -18,35 +17,29 @@ from .crawl_utils import (
 class DDCrawlerPaths(CrawlPaths):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.page_clf = self.root.joinpath('page_clf.joblib')
         self.link_clf = self.root.joinpath('Q.joblib')
         self.out = self.root.joinpath('out')
         self.redis_conf = self.root.joinpath('redis.conf')
         self.hints = self.root.joinpath('hints.txt')
 
 
-class DDCrawlerProcess(CrawlProcess):
+class DDCrawlerProcess(BaseDDCrawlerProcess):
     _jobs_root = Path('dd-jobs')
-    default_docker_image = 'dd-crawler-hh'
+    paths_cls = DDCrawlerPaths
 
     def __init__(self, *,
                  page_clf_data: bytes,
                  link_clf_data: bytes,
-                 root: Path=None,
-                 max_workers: int=None,
                  hints: List[str]=(),
                  broadness: str='BROAD',
                  **kwargs):
         super().__init__(**kwargs)
-        self.paths = DDCrawlerPaths(
-            root or gen_job_path(self.id_, self.jobs_root))
         self.page_clf_data = page_clf_data
         self.link_clf_data = link_clf_data
-        self.max_workers = max_workers
         self.broadness = broadness
         self.initial_hints = hints
-        self.page_limit = self.page_limit or 10000000
         self._hint_domains = set(map(get_domain, hints))
-        self._log_followers = {}  # type: Dict[Path, JsonLinesFollower]
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
@@ -54,10 +47,10 @@ class DDCrawlerProcess(CrawlProcess):
         """
         paths = DDCrawlerPaths(root)
         if not all(p.exists() for p in [
-                paths.pid, paths.id, paths.seeds, paths.page_clf, paths.link_clf,
-                paths.workspace_id]):
+                paths.pid, paths.id, paths.seeds, paths.page_clf,
+                paths.link_clf, paths.workspace_id]):
             return
-        if not cls._is_running(paths.root):
+        if not is_running(paths.root):
             logging.warning('Cleaning up job in {}.'.format(paths.root))
             subprocess.check_call(
                 ['docker-compose', 'down', '-v'], cwd=str(paths.root))
@@ -80,30 +73,6 @@ class DDCrawlerProcess(CrawlProcess):
             link_clf_data=paths.link_clf.read_bytes(),
             root=root,
             **kwargs)
-
-    @staticmethod
-    def _is_running(root: Path) -> bool:
-        running_containers = list(filter(
-            None,
-            subprocess
-            .check_output(['docker-compose', 'ps', '-q'], cwd=str(root))
-            .decode('utf8').strip().split('\n')))
-        crawl_running = 0  # only really running crawlers
-        for cid in running_containers:
-            try:
-                output = json.loads(subprocess.check_output(
-                    ['docker', 'inspect', cid]).decode('utf-8'))
-            except (subprocess.CalledProcessError, ValueError):
-                pass
-            else:
-                if len(output) == 1:
-                    meta = output[0]
-                    if 'crawler' in meta.get('Name', ''):
-                        crawl_running += meta.get('State', {}).get('Running')
-        return crawl_running > 0
-
-    def is_running(self):
-        return self.pid is not None and self._is_running(self.paths.root)
 
     def start(self):
         assert self.pid is None
@@ -154,15 +123,6 @@ class DDCrawlerProcess(CrawlProcess):
         else:
             return re.match('N(\d+)$', broadness).groups()[0]
 
-    def stop(self, verbose=False):
-        assert self.pid is not None
-        if verbose:
-            self._compose_call('logs', '--tail', '30')
-        self._compose_call('down', '-v')
-        self.paths.pid.unlink()
-        logging.info('Crawl "{}" stopped'.format(self.pid))
-        self.pid = None
-
     def handle_hint(self, url: str, pinned: bool):
         domain = get_domain(url)
         if pinned:
@@ -170,11 +130,6 @@ class DDCrawlerProcess(CrawlProcess):
         else:
             self._hint_domains.remove(domain)
         self._scrapy_command('hint', 'pin' if pinned else 'unpin', url)
-
-    def _scrapy_command(self, command, *args):
-        self._compose_call(
-            'exec', '-T', 'crawler', 'scrapy', command, 'deepdeep', *args,
-            '-s', 'REDIS_HOST=redis', '-s', 'LOG_LEVEL=WARNING')
 
     def _get_updates(self) -> Dict[str, Any]:
         n_last = self.get_n_last()
@@ -218,7 +173,3 @@ class DDCrawlerProcess(CrawlProcess):
         else:
             updates['progress'] = 'Crawl is not running yet'
         return updates
-
-    def _compose_call(self, *args):
-        subprocess.check_call(
-            ['docker-compose'] + list(args), cwd=str(self.paths.root))

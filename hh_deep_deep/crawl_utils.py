@@ -27,7 +27,6 @@ class CrawlPaths:
         self.id = root.joinpath('id.txt')
         self.workspace_id = self.root.joinpath('workspace_id.txt')
         self.pid = root.joinpath('pid.txt')
-        self.page_clf = root.joinpath('page_clf.joblib')
         self.seeds = root.joinpath('seeds.txt')
         self.models = Path('./models')
 

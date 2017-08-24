@@ -14,6 +14,7 @@ from .crawl_utils import (
 class DeepDeepPaths(CrawlPaths):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.page_clf = self.root.joinpath('page_clf.joblib')
         self.items = self.root.joinpath('items.jl')
 
 
