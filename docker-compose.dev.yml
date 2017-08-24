@@ -28,6 +28,19 @@ services:
       - --debug                            # debug
       - --max-workers=2                    # limit to only 2 workers
 
+  hh-deepcrawler:
+    image: hh-deep-deep
+    build: .
+    command:
+      - hh-deep-deep-service
+      - deepcrawler
+      - --kafka-host=hh-kafka
+      - --docker-image=auto-dd-crawler-hh  # dev image
+      - --host-root=${PWD}
+      - --proxy-container=hh-deep-deep-tor-proxy
+      - --debug                            # debug
+      - --max-workers=2                    # limit to only 2 workers
+
   hh-modeler:
     image: hh-page-clf
     command:

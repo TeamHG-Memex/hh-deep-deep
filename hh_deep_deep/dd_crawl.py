@@ -6,10 +6,13 @@ import re
 import math
 import multiprocessing
 import subprocess
-from typing import Any, Dict, Optional, List, Set
+from typing import Any, Dict, Optional, List
 
 from .crawl_utils import (
     CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower, get_domain)
+
+
+# TODO - likely, hints must be removed
 
 
 class DDCrawlerPaths(CrawlPaths):
