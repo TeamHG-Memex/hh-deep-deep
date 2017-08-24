@@ -24,11 +24,15 @@ services:
       - {out}:/out
     entrypoint:
       - /dd_crawler/docker/crawl.sh
-      - deepdeep  # FIXME
+      - dd_crawler
       - -a
       - seeds=/dd_crawler/seeds.txt
       - -s
       - CLOSESPIDER_ITEMCOUNT={page_limit}
+      - -s
+      - AUTOPAGER=1
+      - -s
+      - DOMAIN_LIMIT=1
       - -s
       - HTTP_PROXY={proxy}
       - -s

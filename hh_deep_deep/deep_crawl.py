@@ -1,4 +1,4 @@
-from collections import deque
+from collections import defaultdict, deque
 import logging
 from pathlib import Path
 import math
@@ -6,7 +6,7 @@ import multiprocessing
 import subprocess
 from typing import Any, Dict, Optional
 
-from .crawl_utils import CrawlPaths, JsonLinesFollower
+from .crawl_utils import CrawlPaths, JsonLinesFollower, get_domain
 from .dd_utils import BaseDDCrawlerProcess, is_running
 
 
@@ -20,6 +20,13 @@ class DDCrawlerPaths(CrawlPaths):
 class DeepCrawlerProcess(BaseDDCrawlerProcess):
     _jobs_root = Path('deep-jobs')
     paths_cls = DDCrawlerPaths
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._domain_stats = defaultdict(lambda: {
+            'pages_fetched': 0,
+            'last_times': deque(maxlen=50),
+        })
 
     @classmethod
     def load_running(
@@ -83,28 +90,44 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
         n_last = self.get_n_last()
         log_paths = list(self.paths.out.glob('*.log.jl'))
         updates = {}
-        rpm = pages_fetched = 0
-        domains = []
         if log_paths:
             status = 'running'
+            # TODO - 'pages': sample domains first, then get last per domain
+            # in order to have something for each domain
             n_last_per_file = int(math.ceil(n_last / len(log_paths)))
             all_last_items = []
-            n_crawled = n_domains = n_relevant_domains = 0
+            rpm = 0
             for path in log_paths:
                 follower = self._log_followers.setdefault(
                     path, JsonLinesFollower(path))
                 last_items = deque(maxlen=n_last_per_file)
+                last_times = deque(maxlen=50)
                 for item in follower.get_new_items(at_least_last=True):
                     last_items.append(item)
+                    s = self._domain_stats[get_domain(item['url'])]
+                    s['pages_fetched'] += 1
+                    # one domain should almost always be in one file
+                    s['last_times'].append(item['time'])
+                    last_times.append(item['time'])
                 if last_items:
                     all_last_items.extend(last_items)
-                    last = last_items[-1]
-                    n_crawled += last['n_crawled']
+                    rpm += get_rpm(last_times)
             all_last_items.sort(key=lambda x: x['time'])
             updates['pages'] = [{'url': it['url']}
                                 for it in all_last_items[-n_last:]]
-            # TODO - pages_fetched, rpm, domains
+            pages_fetched = sum(
+                s['pages_fetched'] for s in self._domain_stats.values())
+            domains = [{
+                # FIXME - remove "url" from the API?
+                'url': 'http://{}'.format(domain),
+                'domain': domain,
+                'finished': False,  # TODO - this needs dd-crawler features
+                'pages_fetched': s['pages_fetched'],
+                'rpm': get_rpm(s['last_times'])
+            } for domain, s in self._domain_stats.items()]
         else:
+            rpm = pages_fetched = 0
+            domains = []
             status = 'starting'
         updates['progress'] = {
             'status': status,
@@ -113,3 +136,10 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             'domains': domains,
         }
         return updates
+
+
+def get_rpm(last_times):
+    if len(last_times) < 2:
+        return 0
+    t0, t1 = min(last_times), max(last_times)
+    return len(last_times) / (t1 - t0) * 60
