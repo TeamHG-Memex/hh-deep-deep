@@ -10,7 +10,6 @@ from hh_page_clf.models import DefaultModel
 from kafka import KafkaConsumer, KafkaProducer
 import pytest
 
-from hh_deep_deep.crawl_utils import get_domain
 from hh_deep_deep.service import Service, encode_model_data, decode_model_data
 from hh_deep_deep.utils import configure_logging
 
@@ -73,7 +72,7 @@ def _test_service(run_deepdeep, run_dd_crawl):
         producer.flush()
 
     start_crawler_message = None
-    start_message_path = Path('.tst.start-deepdeep.pkl')
+    start_message_path = Path('.tst.start-dd-crawl.pkl')
     if not run_deepdeep:
         if start_message_path.exists():
             with start_message_path.open('rb') as f:
@@ -151,7 +150,7 @@ def _check_progress_pages(progress_consumer, pages_consumer,
 def _test_crawler_service(
         start_message: Dict, send: Callable[[str, Dict], None]) -> None:
     start_message.update({
-        'hints': start_message['seeds'][:1],
+        'hints': start_message['urls'][:1],
         'broadness': 'N10',
     })
     crawler_service = ATestService(
@@ -168,7 +167,7 @@ def _test_crawler_service(
     debug('Sending additional hints')
     send(crawler_service.hints_input_topic, {
         'workspace_id': start_message['workspace_id'],
-        'url': start_message['seeds'][1],
+        'url': start_message['urls'][1],
         'pinned': True,
     })
     try:
@@ -221,7 +220,7 @@ def start_trainer_message(id_: str, ws_id: str) -> Dict:
         'id': id_,
         'workspace_id': ws_id,
         'page_model': encode_model_data(pickle.dumps(model)),
-        'seeds': ['http://wikipedia.org', 'http://news.ycombinator.com'],
+        'urls': ['http://wikipedia.org', 'http://news.ycombinator.com'],
     }
 
 
