@@ -33,7 +33,7 @@ services:
       - hh-deep-deep-service
       - crawler
       - --kafka-host=hh-kafka
-      - --docker-image=hyperiongray/dd-crawler-hh:0.3.1
+      - --docker-image=hyperiongray/dd-crawler-hh:0.3.2
       - --max-workers=8
       - --host-root=${PWD}
       - --proxy-container=hh-deep-deep-tor-proxy
