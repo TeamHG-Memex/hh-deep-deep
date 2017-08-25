@@ -56,6 +56,7 @@ class Service:
 
         topic = lambda x: '{}{}'.format(self.queue_prefix, x)
         self.input_topic = topic('dd-{}-input'.format(self.queue_kind))
+        logging.info('Listening on {} topic'.format(self.input_topic))
         self.consumer = self._kafka_consumer(
             self.input_topic,
             consumer_timeout_ms=200,
@@ -101,6 +102,7 @@ class Service:
                 for value in self._read_consumer(self.consumer):
                     if value == {'from-tests': 'stop'}:
                         logging.info('Got message to stop (from tests)')
+                        self.consumer.commit()
                         return
                     elif all(value.get(key) is not None
                              for key in self.required_keys):
@@ -135,15 +137,8 @@ class Service:
     def start_crawl(self, request: Dict) -> None:
         id_ = request['id']
         workspace_id = request['workspace_id']
-        logging.info(
-            'Got start crawl message with id "{id}", {n_seeds} seeds, '
-            'page model size {page_model:,} bytes{rest}.'.format(
-                id=id_,
-                n_seeds=len(request['urls']),
-                page_model=len(request['page_model']),
-                rest=', link model size {:,}'.format(len(request['link_model']))
-                     if request.get('link_model') else '',
-            ))
+        logging.info('Got start crawl message with id "{id}", {n_seeds} seeds.'
+                     .format(id=id_, n_seeds=len(request['urls'])))
         if self.single_crawl:
             # stop all running processes for this workspace
             # (should be at most 1 usually)

@@ -96,22 +96,18 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             # in order to have something for each domain
             n_last_per_file = int(math.ceil(n_last / len(log_paths)))
             all_last_items = []
-            rpm = 0
             for path in log_paths:
                 follower = self._log_followers.setdefault(
                     path, JsonLinesFollower(path))
                 last_items = deque(maxlen=n_last_per_file)
-                last_times = deque(maxlen=50)
                 for item in follower.get_new_items(at_least_last=True):
                     last_items.append(item)
                     s = self._domain_stats[get_domain(item['url'])]
                     s['pages_fetched'] += 1
                     # one domain should almost always be in one file
                     s['last_times'].append(item['time'])
-                    last_times.append(item['time'])
                 if last_items:
                     all_last_items.extend(last_items)
-                    rpm += get_rpm(last_times)
             all_last_items.sort(key=lambda x: x['time'])
             updates['pages'] = [{'url': it['url']}
                                 for it in all_last_items[-n_last:]]
@@ -125,6 +121,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
                 'pages_fetched': s['pages_fetched'],
                 'rpm': get_rpm(s['last_times'])
             } for domain, s in self._domain_stats.items()]
+            rpm = sum(d['rpm'] for d in domains)
         else:
             rpm = pages_fetched = 0
             domains = []
@@ -141,5 +138,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
 def get_rpm(last_times):
     if len(last_times) < 2:
         return 0
-    t0, t1 = min(last_times), max(last_times)
-    return len(last_times) / (t1 - t0) * 60
+    dt = max(last_times) - min(last_times)
+    if dt < 1:
+        return 0
+    return len(last_times) / dt * 60

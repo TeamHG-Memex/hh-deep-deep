@@ -228,6 +228,52 @@ def stop_crawl_message(id_: str) -> Dict:
     return {'id': id_, 'stop': True, 'verbose': True}
 
 
+def test_deepcrawl():
+    producer = KafkaProducer(value_serializer=encode_message)
+
+    def send(topic: str, message: Dict):
+        producer.send(topic, message).get()
+        producer.flush()
+
+    crawler_service = ATestService(
+        'deepcrawler', check_updates_every=2, max_workers=2, debug=DEBUG)
+    progress_consumer, pages_consumer = [
+        KafkaConsumer(crawler_service.output_topic(kind),
+                      value_deserializer=decode_message)
+        for kind in ['progress', 'pages']]
+    crawler_service_thread = threading.Thread(target=crawler_service.run)
+    crawler_service_thread.start()
+
+    time.sleep(1)  # FIXME - figure out how to deliver the message reliably
+    send(crawler_service.input_topic, {'ping': True})
+    time.sleep(1)
+    debug('Sending start crawler message')
+    start_message = {
+        'id': 'deepcrawl-test',
+        'workspace_id': 'deepcrawl-test-ws',
+        'urls': ['http://wikipedia.org', 'http://news.ycombinator.com'],
+        'page_limit': 1000,
+    }
+    send(crawler_service.input_topic, start_message)
+    try:
+        while True:
+            debug('Waiting for pages message...')
+            pages = next(pages_consumer)
+            # TODO - check domains and urls of pages
+            debug('Got it, now waiting for progress message...')
+            progress_message = next(progress_consumer)
+            debug('Got it:', progress_message.value.get('progress'))
+            progress = progress_message.value['progress']
+            if progress and progress['domains']:
+                # TODO - check fields
+                break
+    finally:
+        send(crawler_service.input_topic,
+             stop_crawl_message(start_message['id']))
+        send(crawler_service.input_topic, {'from-tests': 'stop'})
+        crawler_service_thread.join()
+
+
 def test_encode_model():
     data = 'ё'.encode('utf8')
     assert isinstance(encode_model_data(data), str)
