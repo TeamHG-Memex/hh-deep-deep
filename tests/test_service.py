@@ -245,7 +245,7 @@ def test_deepcrawl():
     crawler_service_thread.start()
 
     time.sleep(1)  # FIXME - figure out how to deliver the message reliably
-    send(crawler_service.input_topic, {'ping': True})
+    send(crawler_service.input_topic, {'create_topic': True})
     time.sleep(1)
     debug('Sending start crawler message')
     start_message = {

@@ -4,6 +4,7 @@ from pathlib import Path
 import math
 import multiprocessing
 import subprocess
+import time
 from typing import Any, Dict, Optional
 
 from .crawl_utils import CrawlPaths, JsonLinesFollower, get_domain
@@ -138,7 +139,10 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
 def get_rpm(last_times):
     if len(last_times) < 2:
         return 0
-    dt = max(last_times) - min(last_times)
-    if dt < 1:
+    t_max = max(last_times)
+    if time.time() - t_max > 100:  # no new pages for a while
+        return 0
+    dt = t_max - min(last_times)
+    if dt < 1:  # not enough statistics
         return 0
     return len(last_times) / dt * 60
