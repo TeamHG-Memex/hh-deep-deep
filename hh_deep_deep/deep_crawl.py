@@ -27,6 +27,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
         self._domain_stats = defaultdict(lambda: {
             'pages_fetched': 0,
             'last_times': deque(maxlen=50),
+            'main_url': None,
         })
 
     @classmethod
@@ -104,6 +105,9 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
                 for item in follower.get_new_items(at_least_last=True):
                     last_items.append(item)
                     s = self._domain_stats[get_domain(item['url'])]
+                    if (s['main_url'] is None or
+                            len(item['url']) < len(s['main_url'])):
+                        s['main_url'] = item['url']
                     s['pages_fetched'] += 1
                     # one domain should almost always be in one file
                     s['last_times'].append(item['time'])
@@ -115,8 +119,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             pages_fetched = sum(
                 s['pages_fetched'] for s in self._domain_stats.values())
             domains = [{
-                # FIXME - remove "url" from the API?
-                'url': 'http://{}'.format(domain),
+                'url': s['main_url'] or 'http://{}'.format(domain),
                 'domain': domain,
                 'finished': False,  # TODO - this needs dd-crawler features
                 'pages_fetched': s['pages_fetched'],

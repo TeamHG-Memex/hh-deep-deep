@@ -11,6 +11,7 @@ from kafka import KafkaConsumer, KafkaProducer
 import pytest
 
 from hh_deep_deep.service import Service, encode_model_data, decode_model_data
+from hh_deep_deep.crawl_utils import get_domain
 from hh_deep_deep.utils import configure_logging
 
 
@@ -259,13 +260,22 @@ def test_deepcrawl():
         while True:
             debug('Waiting for pages message...')
             pages = next(pages_consumer)
-            # TODO - check domains and urls of pages
+            for p in pages.value.get('page_sample'):
+                domain = p['domain']
+                assert domain in {'wikipedia.org', 'ycombinator.com'}
+                assert get_domain(p['url']) == domain
             debug('Got it, now waiting for progress message...')
             progress_message = next(progress_consumer)
             debug('Got it:', progress_message.value.get('progress'))
             progress = progress_message.value['progress']
             if progress and progress['domains']:
-                # TODO - check fields
+                for d in progress['domains']:
+                    domain = get_domain(d['url'])
+                    assert domain in {'wikipedia.org', 'ycombinator.com'}
+                    assert domain == d['domain']
+                    assert d['finished'] in [True, False]
+                    assert d['pages_fetched'] > 0
+                    assert d['rpm'] is not None
                 break
     finally:
         send(crawler_service.input_topic,
