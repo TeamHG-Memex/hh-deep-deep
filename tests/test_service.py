@@ -273,7 +273,7 @@ def test_deepcrawl():
                     domain = get_domain(d['url'])
                     assert domain in {'wikipedia.org', 'ycombinator.com'}
                     assert domain == d['domain']
-                    assert d['finished'] in [True, False]
+                    assert d['status'] in ['running', 'failed', 'finished']
                     assert d['pages_fetched'] > 0
                     assert d['rpm'] is not None
                 break

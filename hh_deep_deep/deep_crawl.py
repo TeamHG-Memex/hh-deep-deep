@@ -121,7 +121,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             domains = [{
                 'url': s['main_url'] or 'http://{}'.format(domain),
                 'domain': domain,
-                'finished': False,  # TODO - this needs dd-crawler features
+                'status': 'running',  # TODO - this needs dd-crawler features
                 'pages_fetched': s['pages_fetched'],
                 'rpm': get_rpm(s['last_times'])
             } for domain, s in self._domain_stats.items()]
