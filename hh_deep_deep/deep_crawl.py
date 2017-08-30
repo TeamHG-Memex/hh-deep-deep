@@ -24,11 +24,16 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._domain_stats = defaultdict(lambda: {
-            'pages_fetched': 0,
-            'last_times': deque(maxlen=50),
-            'main_url': None,
-        })
+        self._domain_stats = {
+            get_domain(url): {
+                'url': url,
+                'pages_fetched': 0,
+                'last_times': deque(maxlen=50),
+            } for url in sorted(self.seeds, reverse=True)}
+        # ^^ Reversed alphabetical to have shorter urls first
+        # in case of several seeds from one domain.
+        self._last_domain_state_item = None
+        self._default_domain_state = 'running'
 
     @classmethod
     def load_running(
@@ -104,13 +109,17 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
                 last_items = deque(maxlen=n_last_per_file)
                 for item in follower.get_new_items(at_least_last=True):
                     last_items.append(item)
-                    s = self._domain_stats[get_domain(item['url'])]
-                    if (s['main_url'] is None or
-                            len(item['url']) < len(s['main_url'])):
-                        s['main_url'] = item['url']
+                    domain = get_domain(item['url'])
+                    if domain not in self._domain_stats:
+                        continue
+                    s = self._domain_stats[domain]
                     s['pages_fetched'] += 1
                     # one domain should almost always be in one file
                     s['last_times'].append(item['time'])
+                    if 'domain_state' in item:
+                        if self._last_domain_state_item is None or (
+                           item['time'] > self._last_domain_state_item['time']):
+                            self._last_domain_state_item = item
                 if last_items:
                     all_last_items.extend(last_items)
             all_last_items.sort(key=lambda x: x['time'])
@@ -119,9 +128,12 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             pages_fetched = sum(
                 s['pages_fetched'] for s in self._domain_stats.values())
             domains = [{
-                'url': s['main_url'] or 'http://{}'.format(domain),
+                'url': s['url'],
                 'domain': domain,
-                'status': 'running',  # TODO - this needs dd-crawler features
+                'status': (self._last_domain_state_item['domain_state']
+                           .get(domain, self._default_domain_state)
+                           if self._last_domain_state_item else
+                           self._default_domain_state),
                 'pages_fetched': s['pages_fetched'],
                 'rpm': get_rpm(s['last_times'])
             } for domain, s in self._domain_stats.items()]

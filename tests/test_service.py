@@ -252,7 +252,8 @@ def test_deepcrawl():
     start_message = {
         'id': 'deepcrawl-test',
         'workspace_id': 'deepcrawl-test-ws',
-        'urls': ['http://wikipedia.org', 'http://news.ycombinator.com'],
+        'urls': ['http://wikipedia.org', 'http://news.ycombinator.com',
+                 'http://no-such-domain'],
         'page_limit': 1000,
     }
     send(crawler_service.input_topic, start_message)
@@ -268,13 +269,22 @@ def test_deepcrawl():
             progress_message = next(progress_consumer)
             debug('Got it:', progress_message.value.get('progress'))
             progress = progress_message.value['progress']
-            if progress and progress['domains']:
+            if progress and progress['domains'] and any(
+                    d['pages_fetched'] > 0 for d in progress['domains']):
                 for d in progress['domains']:
                     domain = get_domain(d['url'])
-                    assert domain in {'wikipedia.org', 'ycombinator.com'}
+                    assert domain in {
+                        'wikipedia.org', 'ycombinator.com', 'no-such-domain'}
+                    if domain == 'ycombinator.com':
+                        assert d['url'] == 'http://news.ycombinator.com'
                     assert domain == d['domain']
                     assert d['status'] in ['running', 'failed', 'finished']
-                    assert d['pages_fetched'] > 0
+                    if domain == 'no-such-domain':
+                        assert d['status'] == 'failed'
+                        assert d['pages_fetched'] == 0
+                    else:
+                        assert d['status'] == 'running'
+                        assert d['pages_fetched'] > 0
                     assert d['rpm'] is not None
                 break
     finally:
