@@ -212,14 +212,14 @@ class Service:
                 progress_message['percentage_done'] = \
                     updates.get('percentage_done', 0)
             self.send(progress_topic, progress_message)
-        page_sample = updates.get('pages')
-        if page_sample:
-            for p in page_sample:
+        page_samples = updates.get('pages')
+        if page_samples:
+            for p in page_samples:
                 p['domain'] = get_domain(p['url'])
             pages_topic = self.output_topic('pages')
             logging.info('Sending {} sample urls for "{}" to {}'
-                         .format(len(page_sample), id_, pages_topic))
-            self.send(pages_topic, {'id': id_, 'page_sample': page_sample})
+                         .format(len(page_samples), id_, pages_topic))
+            self.send(pages_topic, {'id': id_, 'page_samples': page_samples})
 
     def send_model_update(self, id_: str, new_model_data: bytes):
         encoded_model = encode_model_data(new_model_data)

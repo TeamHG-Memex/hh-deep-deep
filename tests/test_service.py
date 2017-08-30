@@ -202,9 +202,9 @@ def check_progress(message):
 def check_pages(message):
     value = message.value
     assert value['id'] in {'test-id', 'test-id-early'}
-    page_sample = value['page_sample']
-    assert len(page_sample) >= 1
-    for s in page_sample:
+    page_samples = value['page_samples']
+    assert len(page_samples) >= 1
+    for s in page_samples:
         assert isinstance(s['score'], float)
         assert 100 >= s['score'] >= 0
         assert s['url'].startswith('http')
@@ -260,7 +260,7 @@ def test_deepcrawl():
         while True:
             debug('Waiting for pages message...')
             pages = next(pages_consumer)
-            for p in pages.value.get('page_sample'):
+            for p in pages.value.get('page_samples'):
                 domain = p['domain']
                 assert domain in {'wikipedia.org', 'ycombinator.com'}
                 assert get_domain(p['url']) == domain
