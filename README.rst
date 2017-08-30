@@ -12,84 +12,11 @@ image that is responsible for training the page score model
 
 .. contents::
 
-Protocol: dd-trainer
---------------------
+API
+---
 
-Incoming: start the crawl, ``dd-trainer-input``::
-
-    {
-      "id": "some crawl id",
-      "workspace_id": "some workspace id",
-      "page_model": "b64-encoded page classifier",
-      "seeds": ["http://example.com", "http://example.com/2"]
-    }
-
-An optional ``page_limit`` key can be added.
-
-Incoming: stop the crawl, ``dd-trainer-input``::
-
-    {
-      "id": "the same id",
-      "stop": true
-    }
-
-
-Outgoing: send update of the link model, ``dd-trainer-output-model``::
-
-    {
-      "id": "some crawl id",
-      "link_model": "b64-encoded link classifier"
-    }
-
-
-Outgoing: send sample of crawled pages, ``dd-trainer-output-pages``::
-
-    {
-      "id": "some crawl id",
-      "page_sample": [
-        {"url": "http://example1.com", "score": 80},
-        {"url": "http://example2.com", "score": 90}
-      ]
-    }
-
-Outgoing: send progress update, ``dd-trainer-output-progress``::
-
-    {
-      "id": "some crawl id",
-      "progress": "Crawled N pages and M domains, average reward is 0.122"
-    }
-
-
-Protocol: dd-crawler
---------------------
-
-Incoming: start the crawl, ``dd-crawler-input``::
-
-    {
-      "id": "some crawl id",
-      "workspace_id": "some workspace id",
-      "page_model": "b64-encoded page classifier",
-      "link_model": "b64-encoded deep-deep model",
-      "seeds": ["http://example.com", "http://example.com/2"],
-      "hints": ["http://example2.com", "http://example2.com/2"],
-      "broadness": "DEEP",
-      "page_limit": 10000000,
-    }
-
-Fields ``hints`` and ``page_limit`` are optional. Possible values for
-``broadness`` field are ``DEEP``, ``N<number>``, ``BROAD``.
-
-Stopping the crawl via ``dd-crawler-input``, and
-``dd-crawler-output-pages``, ``dd-crawler-output-progress`` work exactly the same
-as the corresponding dd-trainer queues.
-
-Incoming: add/remove hints, ``dd-crawler-hints-input``::
-
-    {
-      "workspace_id": "id of the workspace",
-      "url": "the pinned url",
-      "pinned": true / false,
-    }
+API docs are in ``docs/API.rst`` in https://github.com/TeamHG-Memex/sitehound/
+repo.
 
 
 Running with docker
