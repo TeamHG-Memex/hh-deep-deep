@@ -18,9 +18,6 @@ from .deep_crawl import DeepCrawlerProcess
 from .utils import configure_logging, log_ignore_exception
 
 
-# TODO - likely, hints must be removed
-
-
 class Service:
     queue_prefix = ''
     jobs_prefix = ''
@@ -67,11 +64,8 @@ class Service:
             self.login_input_topic = topic('dd-login-output')
             self.login_consumer = self._kafka_consumer(
                 self.login_input_topic, **kafka_kwargs)
-            self.hints_input_topic = topic('dd-crawler-hints-input')
-            self.hints_consumer = self._kafka_consumer(
-                self.hints_input_topic, **kafka_kwargs)
         else:
-            self.hints_consumer = self.login_consumer = None
+            self.login_consumer = None
 
         self.producer = KafkaProducer(
             max_request_size=self.max_message_size,
@@ -118,8 +112,6 @@ class Service:
                             'Dropping a message in unknown format: {}'
                             .format(value.keys() if hasattr(value, 'keys')
                                     else type(value)))
-                for value in self._read_consumer(self.hints_consumer):
-                    executor.submit(self.handle_hint, value)
                 for value in self._read_consumer(self.login_consumer):
                     executor.submit(self.handle_login, value)
                 if counter % self.check_updates_every == 0:
@@ -162,12 +154,10 @@ class Service:
         if 'link_model' in request:
             kwargs['link_clf_data'] = decode_model_data(request['link_model'])
         kwargs.update({field: request[field]
-                       for field in ['page_limit', 'hints', 'broadness']
+                       for field in ['page_limit', 'broadness']
                        if field in request})
         if 'page_limit' in request:
             kwargs['page_limit'] = request['page_limit']
-        if 'hints' in request:
-            kwargs['hints'] = request['hints']
         process = self.process_class(
             id_=id_, workspace_id=workspace_id, **kwargs)
         process.start()
@@ -252,25 +242,8 @@ class Service:
             'timestamp': time.time(),
             'workspaceId': process.workspace_id,
             'event': 'dd-{}'.format(self.queue_kind),
-            "arguments": json.dumps({'jobId': process.id_}),
+            'arguments': json.dumps({'jobId': process.id_}),
         })
-
-    @log_ignore_exception
-    def handle_hint(self, value: dict):
-        workspace_id = value['workspace_id']
-        passed = False
-        for process in self.running.values():  # type: DDCrawlerProcess
-            if process.workspace_id == workspace_id:
-                passed = True
-                logging.info(
-                    'Pass hint message from workspace "{workspace_id}" '
-                    'to crawl "{id}", pinned={pinned}, url {url}'
-                    .format(id=process.id_, **value))
-                process.handle_hint(value['url'], value['pinned'])
-        if not passed:
-            logging.info('Got hint message from workspace "{}", '
-                         'but no process from this workspace is running'
-                         .format(workspace_id))
 
     @log_ignore_exception
     def handle_login(self, value: dict):

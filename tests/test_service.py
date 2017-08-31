@@ -35,10 +35,7 @@ def clear_topics(service):
     if service.queue_kind == 'trainer':
         topics.append(service.output_topic('model'))
     if service.queue_kind == 'crawler':
-        topics.extend([
-            service.hints_input_topic,
-            service.login_output_topic,
-        ])
+        topics.append(service.login_output_topic)
     for topic in topics:
         consumer = KafkaConsumer(topic, consumer_timeout_ms=100,
                                  group_id='{}-group'.format(topic))
@@ -151,10 +148,7 @@ def _check_progress_pages(progress_consumer, pages_consumer,
 
 def _test_crawler_service(
         start_message: Dict, send: Callable[[str, Dict], None]) -> None:
-    start_message.update({
-        'hints': start_message['urls'][:1],
-        'broadness': 'N10',
-    })
+    start_message['broadness'] = 'N10'
     crawler_service = ATestService(
         'crawler', check_updates_every=2, max_workers=2, debug=DEBUG)
     progress_consumer, pages_consumer = [
@@ -168,13 +162,6 @@ def _test_crawler_service(
 
     debug('Sending start crawler message')
     send(crawler_service.input_topic, start_message)
-    debug('Sending additional hints')
-    hint_url = start_message['urls'][1]
-    send(crawler_service.hints_input_topic, {
-        'workspace_id': start_message['workspace_id'],
-        'url': hint_url,
-        'pinned': True,
-    })
     try:
         _check_progress_pages(progress_consumer, pages_consumer)
         send(crawler_service.login_input_topic, {
@@ -191,7 +178,6 @@ def _test_crawler_service(
         assert login_message['job_id'] == start_message['id']
         assert login_message['workspace_id'] == start_message['workspace_id']
         assert login_message['keys'] == ['login', 'password']
-        assert get_domain(login_message['url']) == get_domain(hint_url)
     finally:
         send(crawler_service.input_topic, stop_crawl_message(start_message['id']))
         send(crawler_service.input_topic, {'from-tests': 'stop'})

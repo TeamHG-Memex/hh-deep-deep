@@ -11,9 +11,6 @@ from .crawl_utils import CrawlPaths, JsonLinesFollower, get_domain
 from .dd_utils import BaseDDCrawlerProcess, is_running
 
 
-# TODO - likely, hints must be removed
-
-
 class DDCrawlerPaths(CrawlPaths):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -21,7 +18,6 @@ class DDCrawlerPaths(CrawlPaths):
         self.link_clf = self.root.joinpath('Q.joblib')
         self.out = self.root.joinpath('out')
         self.redis_conf = self.root.joinpath('redis.conf')
-        self.hints = self.root.joinpath('hints.txt')
 
 
 class DDCrawlerProcess(BaseDDCrawlerProcess):
@@ -31,17 +27,12 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
     def __init__(self, *,
                  page_clf_data: bytes,
                  link_clf_data: bytes,
-                 hints: List[str]=(),
                  broadness: str='BROAD',
                  **kwargs):
         super().__init__(**kwargs)
         self.page_clf_data = page_clf_data
         self.link_clf_data = link_clf_data
         self.broadness = broadness
-        self.initial_hints = hints
-        self._hint_domains = set(map(get_domain, hints))
-        self._login_urls = set()  # type: Set[str]
-        self._pending_login_domains = {}  # type: Dict[str, str]
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
@@ -60,17 +51,11 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
             return
         with paths.seeds.open('rt', encoding='utf8') as f:
             seeds = [line.strip() for line in f]
-        if paths.hints.exists():
-            with paths.hints.open('rt', encoding='utf8') as f:
-                hints = [line.strip() for line in f]
-        else:
-            hints = []
         return cls(
             pid=paths.pid.read_text(),
             id_=paths.id.read_text(),
             workspace_id=paths.workspace_id.read_text(),
             seeds=seeds,
-            hints=hints,
             page_clf_data=paths.page_clf.read_bytes(),
             link_clf_data=paths.link_clf.read_bytes(),
             root=root,
@@ -85,8 +70,6 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
         self.paths.link_clf.write_bytes(self.link_clf_data)
         self.paths.seeds.write_text(
             '\n'.join(url for url in self.seeds), encoding='utf8')
-        self.paths.hints.write_text(
-            '\n'.join(url for url in self.initial_hints), encoding='utf8')
         n_processes = multiprocessing.cpu_count()
         if self.max_workers:
             n_processes = min(self.max_workers, n_processes)
@@ -103,7 +86,7 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
                                 if self.proxy_container else '[]'),
                 proxy='http://proxy:8118' if self.proxy_container else '',
                 **{p: self.to_host_path(getattr(self.paths, p)) for p in [
-                    'seeds', 'hints', 'page_clf', 'link_clf', 'redis_conf', 'out',
+                    'seeds', 'page_clf', 'link_clf', 'redis_conf', 'out',
                     'models',
                 ]}
             ))
@@ -125,14 +108,6 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
         else:
             return re.match('N(\d+)$', broadness).groups()[0]
 
-    def handle_hint(self, url: str, pinned: bool):
-        domain = get_domain(url)
-        if pinned:
-            self._hint_domains.add(domain)
-        else:
-            self._hint_domains.remove(domain)
-        self._scrapy_command('hint', 'pin' if pinned else 'unpin', url)
-
     def handle_login(self, url, login, password):
         self._scrapy_command('login', url, login, password)
 
@@ -150,7 +125,7 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
                 last_items = deque(maxlen=n_last_per_file)
                 for item in follower.get_new_items(at_least_last=True):
                     if item.get('has_login_form'):
-                        self._handle_found_login_form(item, updates)
+                        updates.setdefault('login_urls', []).append(item['url'])
                     last_items.append(item)
                 if last_items:
                     all_last_items.extend(last_items)
@@ -179,17 +154,4 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
                 updates['percentage_done'] = 100 * n_crawled / self.page_limit
         else:
             updates['progress'] = 'Crawl is not running yet'
-        for domain in (self._hint_domains & set(self._pending_login_domains)):
-            login_url = self._pending_login_domains.pop(domain)
-            updates.setdefault('login_urls', []).append(login_url)
         return updates
-
-    def _handle_found_login_form(self, item, updates):
-        self._login_urls.add(item['url'])
-        domain = get_domain(item['url'])
-        if domain in self._hint_domains:
-            login_urls = updates.setdefault('login_urls', [])
-            login_urls.append(item['url'])
-            self._pending_login_domains.pop(domain, None)
-        elif domain not in self._pending_login_domains:
-            self._pending_login_domains[domain] = item['url']
