@@ -237,7 +237,8 @@ def test_deepcrawl():
         producer.flush()
 
     crawler_service = ATestService(
-        'deepcrawler', check_updates_every=2, max_workers=2, debug=DEBUG)
+        'deepcrawler', check_updates_every=2, max_workers=2, debug=DEBUG,
+        in_flight_ttl=5)
     progress_consumer, pages_consumer = [
         KafkaConsumer(crawler_service.output_topic(kind),
                       value_deserializer=decode_message)
@@ -269,24 +270,31 @@ def test_deepcrawl():
             progress_message = next(progress_consumer)
             debug('Got it:', progress_message.value.get('progress'))
             progress = progress_message.value['progress']
-            if progress and progress['domains'] and any(
-                    d['pages_fetched'] > 0 for d in progress['domains']):
+            if progress and progress['domains']:
+                domain_statuses = dict()
+                expected_domains = {
+                    'wikipedia.org', 'ycombinator.com', 'no-such-domain'}
                 for d in progress['domains']:
                     domain = get_domain(d['url'])
-                    assert domain in {
-                        'wikipedia.org', 'ycombinator.com', 'no-such-domain'}
+                    domain_statuses[domain] = d['status']
+                    assert domain in expected_domains
                     if domain == 'ycombinator.com':
                         assert d['url'] == 'http://news.ycombinator.com'
                     assert domain == d['domain']
                     assert d['status'] in ['running', 'failed', 'finished']
                     if domain == 'no-such-domain':
-                        assert d['status'] == 'failed'
+                        assert d['status'] in {'failed', 'running'}
                         assert d['pages_fetched'] == 0
                     else:
                         assert d['status'] == 'running'
                         assert d['pages_fetched'] > 0
                     assert d['rpm'] is not None
-                break
+                assert set(domain_statuses) == expected_domains
+                if domain_statuses['no-such-domain'] == 'failed':
+                    break
+                else:
+                    assert max(d['pages_fetched'] for d in progress['domains'])\
+                           < 20
     finally:
         send(crawler_service.input_topic,
              stop_crawl_message(start_message['id']))

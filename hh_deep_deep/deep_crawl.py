@@ -1,11 +1,11 @@
-from collections import defaultdict, deque
+from collections import deque
 import logging
 from pathlib import Path
 import math
 import multiprocessing
 import subprocess
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from .crawl_utils import CrawlPaths, JsonLinesFollower, get_domain
 from .dd_utils import BaseDDCrawlerProcess, is_running
@@ -22,7 +22,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
     _jobs_root = Path('deep-jobs')
     paths_cls = DDCrawlerPaths
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, in_flight_ttl=60, **kwargs):
         super().__init__(*args, **kwargs)
         self._domain_stats = {
             get_domain(url): {
@@ -32,8 +32,13 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             } for url in sorted(self.seeds, reverse=True)}
         # ^^ Reversed alphabetical to have shorter urls first
         # in case of several seeds from one domain.
-        self._last_domain_state_item = None
-        self._default_domain_state = 'running'
+        # Tracking domain state:
+        self._in_flight = dict()  # type: Dict[str, float]
+        self._in_flight_ttl = in_flight_ttl  # seconds
+        self._have_successes = set()
+        self._have_failures = set()
+        self._open_queues = set()
+        self._open_queues_t = time.time()
 
     @classmethod
     def load_running(
@@ -108,35 +113,24 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
                     path, JsonLinesFollower(path))
                 last_items = deque(maxlen=n_last_per_file)
                 for item in follower.get_new_items(at_least_last=True):
-                    last_items.append(item)
-                    domain = get_domain(item['url'])
-                    if domain not in self._domain_stats:
-                        continue
-                    s = self._domain_stats[domain]
-                    s['pages_fetched'] += 1
-                    # one domain should almost always be in one file
-                    s['last_times'].append(item['time'])
+                    if 'url' in item:
+                        last_items.append(item)
+                        domain = get_domain(item['url'])
+                        if domain in self._domain_stats:
+                            s = self._domain_stats[domain]
+                            s['pages_fetched'] += 1
+                            # one domain should almost always be in one file
+                            s['last_times'].append(item['time'])
                     if 'domain_state' in item:
-                        if self._last_domain_state_item is None or (
-                           item['time'] > self._last_domain_state_item['time']):
-                            self._last_domain_state_item = item
+                        self._track_domain_state(item)
                 if last_items:
                     all_last_items.extend(last_items)
             all_last_items.sort(key=lambda x: x['time'])
             updates['pages'] = [{'url': it['url']}
                                 for it in all_last_items[-n_last:]]
-            pages_fetched = sum(
-                s['pages_fetched'] for s in self._domain_stats.values())
-            domains = [{
-                'url': s['url'],
-                'domain': domain,
-                'status': (self._last_domain_state_item['domain_state']
-                           .get(domain, self._default_domain_state)
-                           if self._last_domain_state_item else
-                           self._default_domain_state),
-                'pages_fetched': s['pages_fetched'],
-                'rpm': get_rpm(s['last_times'])
-            } for domain, s in self._domain_stats.items()]
+            pages_fetched = sum(s['pages_fetched']
+                                for s in self._domain_stats.values())
+            domains = self._get_domain_stats()
             rpm = sum(d['rpm'] for d in domains)
         else:
             rpm = pages_fetched = 0
@@ -149,6 +143,40 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             'domains': domains,
         }
         return updates
+
+    def _get_domain_stats(self) -> List[Dict]:
+        return [{
+            'url': s['url'],
+            'domain': domain,
+            'status': self._domain_status(domain),
+            'pages_fetched': s['pages_fetched'],
+            'rpm': get_rpm(s['last_times'])
+        } for domain, s in self._domain_stats.items()]
+
+    def _domain_status(self, domain: str) -> str:
+        if domain in self._open_queues or domain in self._in_flight:
+            return 'running'
+        elif domain in self._have_successes:
+            return 'finished'
+        elif domain in self._have_failures:
+            return 'failed'
+        else:
+            return 'running'  # really "starting", but we use "running" for now
+
+    def _track_domain_state(self, item):
+        ds = item['domain_state']
+        self._have_successes.update(ds['worker_successes'])
+        self._have_failures.update(ds['worker_failures'])
+        if item['time'] > self._open_queues_t:
+            self._open_queues = ds['global_open_queues']
+            self._open_queues_t = item['time']
+        for domain in ds['worker_in_flight']:
+            if domain not in self._in_flight or (
+                    self._in_flight[domain] < item['time']):
+                self._in_flight[domain] = item['time']
+        now = time.time()
+        self._in_flight = {domain: t for domain, t in self._in_flight.items()
+                           if now - t < self._in_flight_ttl}
 
 
 def get_rpm(last_times):
