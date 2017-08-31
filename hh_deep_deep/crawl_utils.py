@@ -9,8 +9,12 @@ from typing import Any, Dict, Optional, List
 import tldextract
 
 
-def get_domain(url: str) -> str:
-    return tldextract.extract(url).registered_domain.lower()
+def get_domain(url):
+    parsed = tldextract.extract(url)
+    domain = parsed.registered_domain
+    if not domain:  # e.g. localhost which is used in tests
+        domain = '.'.join(filter(None, [parsed.domain, parsed.suffix]))
+    return domain.lower()
 
 
 def gen_job_path(id_: str, root: Path) -> Path:
@@ -27,7 +31,6 @@ class CrawlPaths:
         self.id = root.joinpath('id.txt')
         self.workspace_id = self.root.joinpath('workspace_id.txt')
         self.pid = root.joinpath('pid.txt')
-        self.page_clf = root.joinpath('page_clf.joblib')
         self.seeds = root.joinpath('seeds.txt')
         self.models = Path('./models')
 

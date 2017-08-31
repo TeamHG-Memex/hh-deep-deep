@@ -10,8 +10,8 @@ from hh_page_clf.models import DefaultModel
 from kafka import KafkaConsumer, KafkaProducer
 import pytest
 
-from hh_deep_deep.crawl_utils import get_domain
 from hh_deep_deep.service import Service, encode_model_data, decode_model_data
+from hh_deep_deep.crawl_utils import get_domain
 from hh_deep_deep.utils import configure_logging
 
 
@@ -74,7 +74,7 @@ def _test_service(run_deepdeep, run_dd_crawl):
         producer.flush()
 
     start_crawler_message = None
-    start_message_path = Path('.tst.start-deepdeep.pkl')
+    start_message_path = Path('.tst.start-dd-crawl.pkl')
     if not run_deepdeep:
         if start_message_path.exists():
             with start_message_path.open('rb') as f:
@@ -152,7 +152,7 @@ def _check_progress_pages(progress_consumer, pages_consumer,
 def _test_crawler_service(
         start_message: Dict, send: Callable[[str, Dict], None]) -> None:
     start_message.update({
-        'hints': start_message['seeds'][:1],
+        'hints': start_message['urls'][:1],
         'broadness': 'N10',
     })
     crawler_service = ATestService(
@@ -169,7 +169,7 @@ def _test_crawler_service(
     debug('Sending start crawler message')
     send(crawler_service.input_topic, start_message)
     debug('Sending additional hints')
-    hint_url = start_message['seeds'][1]
+    hint_url = start_message['urls'][1]
     send(crawler_service.hints_input_topic, {
         'workspace_id': start_message['workspace_id'],
         'url': hint_url,
@@ -220,9 +220,9 @@ def check_progress(message):
 def check_pages(message):
     value = message.value
     assert value['id'] in {'test-id', 'test-id-early'}
-    page_sample = value['page_sample']
-    assert len(page_sample) >= 1
-    for s in page_sample:
+    page_samples = value['page_samples']
+    assert len(page_samples) >= 1
+    for s in page_samples:
         assert isinstance(s['score'], float)
         assert 100 >= s['score'] >= 0
         assert s['url'].startswith('http')
@@ -239,12 +239,85 @@ def start_trainer_message(id_: str, ws_id: str) -> Dict:
         'id': id_,
         'workspace_id': ws_id,
         'page_model': encode_model_data(pickle.dumps(model)),
-        'seeds': ['http://wikipedia.org', 'http://news.ycombinator.com'],
+        'urls': ['http://wikipedia.org', 'http://news.ycombinator.com'],
     }
 
 
 def stop_crawl_message(id_: str) -> Dict:
     return {'id': id_, 'stop': True, 'verbose': True}
+
+
+def test_deepcrawl():
+    producer = KafkaProducer(value_serializer=encode_message)
+
+    def send(topic: str, message: Dict):
+        producer.send(topic, message).get()
+        producer.flush()
+
+    crawler_service = ATestService(
+        'deepcrawler', check_updates_every=2, max_workers=2, debug=DEBUG,
+        in_flight_ttl=5)
+    progress_consumer, pages_consumer = [
+        KafkaConsumer(crawler_service.output_topic(kind),
+                      value_deserializer=decode_message)
+        for kind in ['progress', 'pages']]
+    crawler_service_thread = threading.Thread(target=crawler_service.run)
+    crawler_service_thread.start()
+
+    time.sleep(1)  # FIXME - figure out how to deliver the message reliably
+    send(crawler_service.input_topic, {'create_topic': True})
+    time.sleep(1)
+    debug('Sending start crawler message')
+    start_message = {
+        'id': 'deepcrawl-test',
+        'workspace_id': 'deepcrawl-test-ws',
+        'urls': ['http://wikipedia.org', 'http://news.ycombinator.com',
+                 'http://no-such-domain'],
+        'page_limit': 1000,
+    }
+    send(crawler_service.input_topic, start_message)
+    try:
+        while True:
+            debug('Waiting for pages message...')
+            pages = next(pages_consumer)
+            for p in pages.value.get('page_samples'):
+                domain = p['domain']
+                assert domain in {'wikipedia.org', 'ycombinator.com'}
+                assert get_domain(p['url']) == domain
+            debug('Got it, now waiting for progress message...')
+            progress_message = next(progress_consumer)
+            debug('Got it:', progress_message.value.get('progress'))
+            progress = progress_message.value['progress']
+            if progress and progress['domains']:
+                domain_statuses = dict()
+                expected_domains = {
+                    'wikipedia.org', 'ycombinator.com', 'no-such-domain'}
+                for d in progress['domains']:
+                    domain = get_domain(d['url'])
+                    domain_statuses[domain] = d['status']
+                    assert domain in expected_domains
+                    if domain == 'ycombinator.com':
+                        assert d['url'] == 'http://news.ycombinator.com'
+                    assert domain == d['domain']
+                    assert d['status'] in ['running', 'failed', 'finished']
+                    if domain == 'no-such-domain':
+                        assert d['status'] in {'failed', 'running'}
+                        assert d['pages_fetched'] == 0
+                    else:
+                        assert d['status'] == 'running'
+                        assert d['pages_fetched'] > 0
+                    assert d['rpm'] is not None
+                assert set(domain_statuses) == expected_domains
+                if domain_statuses['no-such-domain'] == 'failed':
+                    break
+                else:
+                    assert max(d['pages_fetched'] for d in progress['domains'])\
+                           < 20
+    finally:
+        send(crawler_service.input_topic,
+             stop_crawl_message(start_message['id']))
+        send(crawler_service.input_topic, {'from-tests': 'stop'})
+        crawler_service_thread.join()
 
 
 def test_encode_model():

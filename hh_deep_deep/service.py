@@ -11,10 +11,14 @@ import zlib
 
 from kafka import KafkaConsumer, KafkaProducer
 
-from .crawl_utils import CrawlProcess
+from .crawl_utils import CrawlProcess, get_domain
 from .deepdeep_crawl import DeepDeepProcess
 from .dd_crawl import DDCrawlerProcess
+from .deep_crawl import DeepCrawlerProcess
 from .utils import configure_logging, log_ignore_exception
+
+
+# TODO - likely, hints must be removed
 
 
 class Service:
@@ -28,15 +32,21 @@ class Service:
                  check_updates_every: int=30,
                  debug: bool=False,
                  **crawler_process_kwargs):
+        # some config depending on the queue kind
         self.queue_kind = queue_kind
-        self.required_keys = ['id', 'workspace_id', 'seeds'] + {
+        self.required_keys = ['id', 'workspace_id', 'urls'] + {
             'trainer': ['page_model'],
             'crawler': ['page_model', 'link_model'],
+            'deepcrawler': [],
             }[queue_kind]
         self.process_class = {
             'trainer': DeepDeepProcess,
             'crawler': DDCrawlerProcess,
+            'deepcrawler': DeepCrawlerProcess,
             }[queue_kind]
+        self.needs_percentage_done = queue_kind != 'deepcrawler'
+        self.single_crawl = queue_kind != 'deepcrawler'
+
         kafka_kwargs = {}
         if kafka_host is not None:
             kafka_kwargs['bootstrap_servers'] = kafka_host
@@ -46,6 +56,7 @@ class Service:
 
         topic = lambda x: '{}{}'.format(self.queue_prefix, x)
         self.input_topic = topic('dd-{}-input'.format(self.queue_kind))
+        logging.info('Listening on {} topic'.format(self.input_topic))
         self.consumer = self._kafka_consumer(
             self.input_topic,
             consumer_timeout_ms=200,
@@ -95,6 +106,7 @@ class Service:
                 for value in self._read_consumer(self.consumer):
                     if value == {'from-tests': 'stop'}:
                         logging.info('Got message to stop (from tests)')
+                        self.consumer.commit()
                         return
                     elif all(value.get(key) is not None
                              for key in self.required_keys):
@@ -131,27 +143,22 @@ class Service:
     def start_crawl(self, request: Dict) -> None:
         id_ = request['id']
         workspace_id = request['workspace_id']
-        logging.info(
-            'Got start crawl message with id "{id}", {seeds} seeds, '
-            'page model size {page_model:,} bytes{rest}.'.format(
-                id=id_,
-                seeds=len(request['seeds']),
-                page_model=len(request['page_model']),
-                rest=', link model size {:,}'.format(len(request['link_model']))
-                     if request.get('link_model') else '',
-            ))
-        # stop all running processes for this workspace
-        # (should be at most 1 usually)
-        for p_id, process in list(self.running.items()):
-            if process.workspace_id == workspace_id:
-                logging.info('Stopping old process {} for workspace {}'
-                             .format(p_id, workspace_id))
-                process.stop()
-                self.running.pop(p_id, None)
-                self.send_stopped_message(process)
+        logging.info('Got start crawl message with id "{id}", {n_seeds} seeds.'
+                     .format(id=id_, n_seeds=len(request['urls'])))
+        if self.single_crawl:
+            # stop all running processes for this workspace
+            # (should be at most 1 usually)
+            for p_id, process in list(self.running.items()):
+                if process.workspace_id == workspace_id:
+                    logging.info('Stopping old process {} for workspace {}'
+                                 .format(p_id, workspace_id))
+                    process.stop()
+                    self.running.pop(p_id, None)
+                    self.send_stopped_message(process)
         kwargs = dict(self.crawler_process_kwargs)
-        kwargs['seeds'] = request['seeds']
-        kwargs['page_clf_data'] = decode_model_data(request['page_model'])
+        kwargs['seeds'] = request['urls']
+        if 'page_model' in request:
+            kwargs['page_clf_data'] = decode_model_data(request['page_model'])
         if 'link_model' in request:
             kwargs['link_clf_data'] = decode_model_data(request['link_model'])
         kwargs.update({field: request[field]
@@ -206,17 +213,19 @@ class Service:
             progress_topic = self.output_topic('progress')
             logging.info('Sending update for "{}" to {}: {}'
                          .format(id_, progress_topic, progress))
-            self.send(progress_topic, {
-                'id': id_,
-                'progress': progress,
-                'percentage_done': updates.get('percentage_done', 0.),
-            })
-        page_sample = updates.get('pages')
-        if page_sample:
+            progress_message = {'id': id_, 'progress': progress}
+            if self.needs_percentage_done:
+                progress_message['percentage_done'] = \
+                    updates.get('percentage_done', 0)
+            self.send(progress_topic, progress_message)
+        page_samples = updates.get('pages')
+        if page_samples:
+            for p in page_samples:
+                p['domain'] = get_domain(p['url'])
             pages_topic = self.output_topic('pages')
             logging.info('Sending {} sample urls for "{}" to {}'
-                         .format(len(page_sample), id_, pages_topic))
-            self.send(pages_topic, {'id': id_, 'page_sample': page_sample})
+                         .format(len(page_samples), id_, pages_topic))
+            self.send(pages_topic, {'id': id_, 'page_sample': page_samples})
         login_urls = updates.get('login_urls')
         if login_urls:
             for url in login_urls:
@@ -305,11 +314,11 @@ def decode_model_data(data: Optional[str]) -> bytes:
 def main():
     parser = argparse.ArgumentParser()
     arg = parser.add_argument
-    arg('kind', choices=['trainer', 'crawler'])
+    arg('kind', choices=['trainer', 'crawler', 'deepcrawler'])
     arg('--docker-image', help='Name of docker image for the crawler')
     arg('--kafka-host')
     arg('--host-root', help='Pass host ${PWD} if running in a docker container')
-    arg('--max-workers', type=int, help='Only for "crawler"')
+    arg('--max-workers', type=int, help='Only for "crawler" or "deepcrawler"')
     arg('--debug', action='store_true')
     arg('--proxy-container', help='proxy container name')
     args = parser.parse_args()
