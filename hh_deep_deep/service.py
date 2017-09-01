@@ -225,6 +225,7 @@ class Service:
                     'workspace_id': process.workspace_id,
                     'job_id': id_,
                     'url': url,
+                    'domain': get_domain(url),
                     'keys': ['login', 'password'],
                     'screenshot': None,
                 })

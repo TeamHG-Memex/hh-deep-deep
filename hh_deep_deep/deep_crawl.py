@@ -121,6 +121,9 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
                             s['pages_fetched'] += 1
                             # one domain should almost always be in one file
                             s['last_times'].append(item['time'])
+                        if item.get('has_login_form'):
+                            updates.setdefault('login_urls', [])\
+                                   .append(item['url'])
                     if 'domain_state' in item:
                         self._track_domain_state(item)
                 if last_items:
