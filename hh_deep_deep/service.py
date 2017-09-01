@@ -215,7 +215,7 @@ class Service:
             pages_topic = self.output_topic('pages')
             logging.info('Sending {} sample urls for "{}" to {}'
                          .format(len(page_samples), id_, pages_topic))
-            self.send(pages_topic, {'id': id_, 'page_sample': page_samples})
+            self.send(pages_topic, {'id': id_, 'page_samples': page_samples})
         login_urls = updates.get('login_urls')
         if login_urls:
             for url in login_urls:
