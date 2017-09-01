@@ -43,6 +43,7 @@ class Service:
             }[queue_kind]
         self.needs_percentage_done = queue_kind != 'deepcrawler'
         self.single_crawl = queue_kind != 'deepcrawler'
+        supports_login = self.queue_kind in {'crawler', 'deepcrawler'}
 
         kafka_kwargs = {}
         if kafka_host is not None:
@@ -59,7 +60,7 @@ class Service:
             consumer_timeout_ms=200,
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
-        if self.queue_kind == 'crawler':
+        if supports_login:
             self.login_output_topic = topic('dd-login-input')
             self.login_input_topic = topic('dd-login-output')
             self.login_consumer = self._kafka_consumer(

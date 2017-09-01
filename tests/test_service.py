@@ -247,6 +247,8 @@ def test_deepcrawl():
         KafkaConsumer(crawler_service.output_topic(kind),
                       value_deserializer=decode_message)
         for kind in ['progress', 'pages']]
+    login_consumer = KafkaConsumer(crawler_service.login_output_topic,
+                                   value_deserializer=decode_message)
     crawler_service_thread = threading.Thread(target=crawler_service.run)
     crawler_service_thread.start()
 
@@ -296,11 +298,17 @@ def test_deepcrawl():
                         assert d['pages_fetched'] > 0
                     assert d['rpm'] is not None
                 assert set(domain_statuses) == expected_domains
-                if domain_statuses['no-such-domain'] == 'failed':
-                    break
-                else:
+                if domain_statuses['no-such-domain'] != 'failed':
                     assert max(d['pages_fetched'] for d in progress['domains'])\
                            < 20
+                    continue
+            debug('Waiting for login message...')
+            login_message = next(login_consumer).value
+            debug('Got login message for {}'.format(login_message['url']))
+            assert login_message['job_id'] == start_message['id']
+            assert login_message['workspace_id'] == start_message['workspace_id']
+            assert login_message['keys'] == ['login', 'password']
+            break
     finally:
         send(crawler_service.input_topic,
              stop_crawl_message(start_message['id']))
