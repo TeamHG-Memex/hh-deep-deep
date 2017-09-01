@@ -274,7 +274,9 @@ def test_deepcrawl():
             progress_message = next(progress_consumer)
             debug('Got it:', progress_message.value.get('progress'))
             progress = progress_message.value['progress']
-            if progress and progress['domains']:
+            if progress and progress['domains'] and all(
+                    d['pages_fetched'] for d in progress['domains']
+                    if d['status'] == 'running'):
                 domain_statuses = dict()
                 expected_domains = {
                     'wikipedia.org', 'ycombinator.com', 'no-such-domain'}
