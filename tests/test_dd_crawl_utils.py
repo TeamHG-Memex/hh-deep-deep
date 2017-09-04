@@ -1,9 +1,6 @@
-import csv
-from pathlib import Path
-import os
-import tempfile
-
-from hh_deep_deep.deepdeep_crawl import get_progress_from_item, get_sample_from_item
+from hh_deep_deep.deepdeep_crawl import (
+    get_progress_from_item, get_sample_from_item,
+)
 
 
 item = {
