@@ -43,7 +43,7 @@ class Service:
             }[queue_kind]
         self.needs_percentage_done = queue_kind != 'deepcrawler'
         self.single_crawl = queue_kind != 'deepcrawler'
-        supports_login = self.queue_kind in {'crawler', 'deepcrawler'}
+        self.supports_login = self.queue_kind in {'crawler', 'deepcrawler'}
 
         kafka_kwargs = {}
         if kafka_host is not None:
@@ -60,13 +60,12 @@ class Service:
             consumer_timeout_ms=200,
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
-        if supports_login:
+        if self.supports_login:
             self.login_output_topic = topic('dd-login-input')
             self.login_input_topic = topic('dd-login-output')
+            self.login_result_topic = topic('dd-login-result')
             self.login_consumer = self._kafka_consumer(
                 self.login_input_topic, **kafka_kwargs)
-        else:
-            self.login_consumer = None
 
         self.producer = KafkaProducer(
             max_request_size=self.max_message_size,
@@ -113,8 +112,9 @@ class Service:
                             'Dropping a message in unknown format: {}'
                             .format(value.keys() if hasattr(value, 'keys')
                                     else type(value)))
-                for value in self._read_consumer(self.login_consumer):
-                    executor.submit(self.handle_login, value)
+                if self.supports_login:
+                    for value in self._read_consumer(self.login_consumer):
+                        executor.submit(self.handle_login, value)
                 if counter % self.check_updates_every == 0:
                     executor.submit(self.send_updates)
                 self.producer.flush()

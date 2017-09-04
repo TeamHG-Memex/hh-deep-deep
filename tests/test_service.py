@@ -164,6 +164,7 @@ def _test_crawler_service(
     send(crawler_service.input_topic, start_message)
     try:
         _check_progress_pages(progress_consumer, pages_consumer)
+        # FIXME - this should be sent after getting login message
         send(crawler_service.login_input_topic, {
             'job_id': start_message['id'],
             'url': 'http://news.ycombinator.com',
@@ -240,15 +241,18 @@ def test_deepcrawl():
         producer.send(topic, message).get()
         producer.flush()
 
+    # FIXME - max_workers set to 1 because with >1 workers the first might
+    # exit due to running out of domains, and handle_login will fail
     crawler_service = ATestService(
-        'deepcrawler', check_updates_every=2, max_workers=2, debug=DEBUG,
+        'deepcrawler', check_updates_every=2, max_workers=1, debug=DEBUG,
         in_flight_ttl=5)
-    progress_consumer, pages_consumer = [
-        KafkaConsumer(crawler_service.output_topic(kind),
-                      value_deserializer=decode_message)
-        for kind in ['progress', 'pages']]
-    login_consumer = KafkaConsumer(crawler_service.login_output_topic,
-                                   value_deserializer=decode_message)
+    progress_consumer, pages_consumer, login_consumer, login_result_consumer = [
+        KafkaConsumer(topic, value_deserializer=decode_message)
+        for topic in [crawler_service.output_topic('progress'),
+                      crawler_service.output_topic('pages'),
+                      crawler_service.login_output_topic,
+                      crawler_service.login_result_topic,
+                      ]]
     crawler_service_thread = threading.Thread(target=crawler_service.run)
     crawler_service_thread.start()
 
@@ -298,17 +302,28 @@ def test_deepcrawl():
                         assert d['pages_fetched'] > 0
                     assert d['rpm'] is not None
                 assert set(domain_statuses) == expected_domains
-                if domain_statuses['no-such-domain'] != 'failed':
+                if domain_statuses['no-such-domain'] == 'failed':
+                    break
+                else:
                     assert max(d['pages_fetched'] for d in progress['domains'])\
                            < 20
-                    continue
-            debug('Waiting for login message...')
-            login_message = next(login_consumer).value
-            debug('Got login message for {}'.format(login_message['url']))
-            assert login_message['job_id'] == start_message['id']
-            assert login_message['workspace_id'] == start_message['workspace_id']
-            assert login_message['keys'] == ['login', 'password']
-            break
+        debug('Waiting for login message...')
+        login_message = next(login_consumer).value
+        debug('Got login message for {}'.format(login_message['url']))
+        assert login_message['job_id'] == start_message['id']
+        assert login_message['workspace_id'] == start_message['workspace_id']
+        assert login_message['keys'] == ['login', 'password']
+        send(crawler_service.login_input_topic, {
+            'job_id': start_message['id'],
+            'url': 'http://news.ycombinator.com',
+            'key_values': {
+                'login': 'invalid',
+                'password': 'invalid',
+            }
+        })
+        debug('Waiting for login result message...')
+        login_result = next(login_result_consumer).value
+        # TODO
     finally:
         send(crawler_service.input_topic,
              stop_crawl_message(start_message['id']))
