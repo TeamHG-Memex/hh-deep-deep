@@ -108,9 +108,6 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
         else:
             return re.match('N(\d+)$', broadness).groups()[0]
 
-    def handle_login(self, url, login, password):
-        self._scrapy_command('login', url, login, password)
-
     def _get_updates(self) -> Dict[str, Any]:
         n_last = self.get_n_last()
         log_paths = list(self.paths.out.glob('*.log.jl'))

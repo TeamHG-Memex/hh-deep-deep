@@ -38,6 +38,9 @@ class BaseDDCrawlerProcess(CrawlProcess):
         logging.info('Crawl "{}" stopped'.format(self.pid))
         self.pid = None
 
+    def handle_login(self, url, login, password):
+        self._scrapy_command('login', url, login, password)
+
     def _scrapy_command(self, command, *args):
         self._compose_call(
             'exec', '-T', 'crawler', 'scrapy', command, 'deepdeep', *args,
