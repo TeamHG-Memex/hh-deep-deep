@@ -19,6 +19,7 @@ configure_logging()
 
 
 DEBUG = False
+TEST_SERVER_CONTAINER = 'hh-deep-deep-test-server'
 
 
 class ATestService(Service):
@@ -244,8 +245,9 @@ def test_deepcrawl():
     # FIXME - max_workers set to 1 because with >1 workers the first might
     # exit due to running out of domains, and handle_login will fail
     crawler_service = ATestService(
-        'deepcrawler', check_updates_every=2, max_workers=1, debug=DEBUG,
-        in_flight_ttl=5)
+        'deepcrawler', check_updates_every=2, max_workers=1,
+        debug=DEBUG, in_flight_ttl=5,
+        test_server_container=TEST_SERVER_CONTAINER)
     progress_consumer, pages_consumer, login_consumer, login_result_consumer = [
         KafkaConsumer(topic, value_deserializer=decode_message)
         for topic in [crawler_service.output_topic('progress'),
@@ -263,35 +265,35 @@ def test_deepcrawl():
     start_message = {
         'id': 'deepcrawl-test',
         'workspace_id': 'deepcrawl-test-ws',
-        'urls': ['http://wikipedia.org', 'http://news.ycombinator.com',
-                 'http://no-such-domain'],
+        'urls': ['http://test-server-1:8781/',
+                 'http://test-server-2:8781/',
+                 'http://test-server-3:8781/',
+                 'http://no-such-domain/',
+                 ],
         'page_limit': 1000,
     }
     send(crawler_service.input_topic, start_message)
+    expected_domains = {'test-server-1', 'test-server-2', 'test-server-3'}
     try:
         while True:
             debug('Waiting for pages message...')
             pages = next(pages_consumer)
             for p in pages.value.get('page_samples'):
                 domain = p['domain']
-                assert domain in {'wikipedia.org', 'ycombinator.com'}
+                assert domain in expected_domains
                 assert get_domain(p['url']) == domain
             debug('Got it, now waiting for progress message...')
             progress_message = next(progress_consumer)
             debug('Got it:', progress_message.value.get('progress'))
             progress = progress_message.value['progress']
             if progress and progress['domains'] and all(
-                    d['pages_fetched'] for d in progress['domains']
+                    d['pages_fetched'] > 0 for d in progress['domains']
                     if d['status'] == 'running'):
                 domain_statuses = dict()
-                expected_domains = {
-                    'wikipedia.org', 'ycombinator.com', 'no-such-domain'}
                 for d in progress['domains']:
                     domain = get_domain(d['url'])
                     domain_statuses[domain] = d['status']
                     assert domain in expected_domains
-                    if domain == 'ycombinator.com':
-                        assert d['url'] == 'http://news.ycombinator.com'
                     assert domain == d['domain']
                     assert d['status'] in ['running', 'failed', 'finished']
                     if domain == 'no-such-domain':
@@ -304,9 +306,6 @@ def test_deepcrawl():
                 assert set(domain_statuses) == expected_domains
                 if domain_statuses['no-such-domain'] == 'failed':
                     break
-                else:
-                    assert max(d['pages_fetched'] for d in progress['domains'])\
-                           < 20
         debug('Waiting for login message...')
         login_message = next(login_consumer).value
         debug('Got login message for {}'.format(login_message['url']))

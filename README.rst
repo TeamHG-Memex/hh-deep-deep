@@ -126,13 +126,16 @@ In order to raise the limit, do the following in the kafka container::
 
 For some reason, pushing messages does not work after container stop/start.
 
-Make sure you have ``dd-crawler-hh`` and ``deep-deep-hh`` images
-(set in ``default_docker_image`` property of
-``DDCrawlerProcess`` and ``DeepDeepProcess``).
-These images can be built using dockerfiles in the ``./docker/`` folder::
+Build images for testing::
 
     docker build -t dd-crawler-hh -f docker/dd-crawler.docker docker/
     docker build -t deep-deep-hh -f docker/deep-deep.docker docker/
+    docker build -t hh-deep-deep-test-server tests/
+
+Start login test server::
+
+    docker run --rm -it --name hh-deep-deep-test-server \
+        hh-deep-deep-test-server login
 
 Run tests::
 
