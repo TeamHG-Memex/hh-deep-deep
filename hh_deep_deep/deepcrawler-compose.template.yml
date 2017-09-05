@@ -43,6 +43,8 @@ services:
       - AUTOLOGIN_ENABLED=1
       - -s
       - AUTOLOGIN_URL=http://autologin:8089
+      - -s
+      - SCHEDULER_IDLE_BEFORE_CLOSE={idle_before_close}
     dns:
       - 127.0.0.1
     links:

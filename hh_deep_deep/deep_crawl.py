@@ -22,8 +22,12 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
     _jobs_root = Path('deep-jobs')
     paths_cls = DDCrawlerPaths
 
-    def __init__(self, *args, in_flight_ttl=60, **kwargs):
+    def __init__(self, *args,
+                 in_flight_ttl=60,
+                 idle_before_close=100,
+                 **kwargs):
         super().__init__(*args, **kwargs)
+        self.idle_before_close = idle_before_close
         self._domain_stats = {
             get_domain(url): {
                 'url': url,
@@ -84,6 +88,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
                 page_limit=int(math.ceil(self.page_limit / n_processes)),
                 external_links=self.external_links,
                 proxy=self.proxy,
+                idle_before_close=self.idle_before_close,
                 **{p: self.to_host_path(getattr(self.paths, p)) for p in [
                     'seeds', 'redis_conf', 'out',
                 ]}

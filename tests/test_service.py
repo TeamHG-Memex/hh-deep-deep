@@ -245,9 +245,13 @@ def test_deepcrawl():
     # FIXME - max_workers set to 1 because with >1 workers the first might
     # exit due to running out of domains, and handle_login will fail
     crawler_service = ATestService(
-        'deepcrawler', check_updates_every=2, max_workers=1,
-        debug=DEBUG, in_flight_ttl=5,
-        test_server_container=TEST_SERVER_CONTAINER)
+        'deepcrawler',
+        check_updates_every=2,
+        max_workers=1,
+        in_flight_ttl=5,
+        idle_before_close=5,
+        test_server_container=TEST_SERVER_CONTAINER,
+        debug=DEBUG)
     progress_consumer, pages_consumer, login_consumer, login_result_consumer = [
         KafkaConsumer(topic, value_deserializer=decode_message)
         for topic in [crawler_service.output_topic('progress'),
