@@ -41,6 +41,22 @@ class BaseDDCrawlerProcess(CrawlProcess):
     def handle_login(self, url, login, password):
         self._scrapy_command('login', url, login, password)
 
+    @property
+    def external_links(self) -> str:
+        """ External links in docker-compose format. """
+        external_links = []
+        if self.proxy_container:
+            external_links.append('{}:proxy'.format(self.proxy_container))
+        if self.test_server_container:
+            external_links.extend(
+                '{}:test-server-{}'.format(self.test_server_container, i + 1)
+                for i in range(3))
+        return json.dumps(external_links)
+
+    @property
+    def proxy(self):
+        return 'http://proxy:8118' if self.proxy_container else ''
+
     def _scrapy_command(self, command, *args):
         self._compose_call(
             'exec', '-T', 'crawler', 'scrapy', command, 'deepdeep', *args,

@@ -82,9 +82,8 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             compose_templates.format(
                 docker_image=self.docker_image,
                 page_limit=int(math.ceil(self.page_limit / n_processes)),
-                external_links=('["{}:proxy"]'.format(self.proxy_container)
-                                if self.proxy_container else '[]'),
-                proxy='http://proxy:8118' if self.proxy_container else '',
+                external_links=self.external_links,
+                proxy=self.proxy,
                 **{p: self.to_host_path(getattr(self.paths, p)) for p in [
                     'seeds', 'redis_conf', 'out',
                 ]}

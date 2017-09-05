@@ -82,9 +82,8 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
                 page_limit=int(math.ceil(self.page_limit / n_processes)),
                 max_relevant_domains=self._max_relevant_domains(self.broadness),
                 relevancy_threshold=0.8,  # just a heuristics
-                external_links=('["{}:proxy"]'.format(self.proxy_container)
-                                if self.proxy_container else '[]'),
-                proxy='http://proxy:8118' if self.proxy_container else '',
+                external_links=self.external_links,
+                proxy=self.proxy,
                 **{p: self.to_host_path(getattr(self.paths, p)) for p in [
                     'seeds', 'page_clf', 'link_clf', 'redis_conf', 'out',
                     'models',

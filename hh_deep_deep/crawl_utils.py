@@ -52,7 +52,8 @@ class CrawlProcess:
                  pid: str=None,
                  jobs_prefix: str=None,
                  page_limit: int=None,
-                 proxy_container: str=None):
+                 proxy_container: str=None,
+                 test_server_container: str=None):
         self.pid = pid
         self.id_ = id_
         self.workspace_id = workspace_id
@@ -62,6 +63,7 @@ class CrawlProcess:
         self.jobs_prefix = jobs_prefix
         self.page_limit = page_limit
         self.proxy_container = proxy_container
+        self.test_server_container = test_server_container
         self.last_progress = None  # last update sent in self.get_updates
         self.last_page = None  # last page sample sent in self.get_updates
         self.last_page_time = None

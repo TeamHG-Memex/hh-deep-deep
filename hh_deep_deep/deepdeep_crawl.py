@@ -97,6 +97,9 @@ class DeepDeepProcess(CrawlProcess):
         if self.proxy_container:
             docker_args.extend(
                 ['--link', '{}:proxy'.format(self.proxy_container)])
+        if self.test_server_container:
+            docker_args.extend(
+                ['--link', '{}:test-server'.format(self.test_server_container)])
         docker_args.append(self.docker_image)
         args = docker_args + [
             'scrapy', 'crawl', 'relevant',
