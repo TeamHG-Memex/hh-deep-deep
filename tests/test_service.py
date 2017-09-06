@@ -277,12 +277,12 @@ def test_deepcrawl():
         'login_credentials': [
             {'id': 'cred-id-fajfh',
              'domain': 'test-server-1',
-             'url': 'http://test-server-1/login',
+             'url': 'http://test-server-1:8781/login',
              'key_values': {'login': 'admin', 'password': 'secret'},
              },
             {'id': 'cred-id-afhu',
              'domain': 'test-server-2',
-             'url': 'http://test-server-2/login',
+             'url': 'http://test-server-2:8781/login',
              'key_values': {'login': 'admin', 'password': 'wrong'},
              },
         ],
@@ -291,6 +291,7 @@ def test_deepcrawl():
     send(crawler_service.input_topic, start_message)
     expected_live_domains = {'test-server-1', 'test-server-2', 'test-server-3'}
     expected_domains = expected_live_domains | {'no-such-domain'}
+    sent_login = False
     try:
         while True:
             debug('Waiting for pages message...')
@@ -303,25 +304,32 @@ def test_deepcrawl():
             progress_message = next(progress_consumer)
             debug('Got it:', progress_message.value.get('progress'))
             progress = progress_message.value['progress']
-            if progress and progress['domains'] and all(
-                    d['pages_fetched'] > 0 for d in progress['domains']
-                    if d['status'] == 'running'):
+            if progress and progress['domains']:
                 domain_statuses = dict()
                 for d in progress['domains']:
                     domain = get_domain(d['url'])
                     domain_statuses[domain] = d['status']
                     assert domain in expected_domains
                     assert domain == d['domain']
-                    assert d['status'] in ['running', 'failed', 'finished']
                     if domain == 'no-such-domain':
                         assert d['status'] in {'failed', 'running'}
                         assert d['pages_fetched'] == 0
                     else:
-                        assert d['status'] == 'running'
-                        assert d['pages_fetched'] > 0
+                        assert d['status'] in {'running', 'finished'}
                     assert d['rpm'] is not None
                 assert set(domain_statuses) == expected_domains
-                if domain_statuses['no-such-domain'] == 'failed':
+                if not sent_login:
+                    sent_login = True
+                    send(crawler_service.login_input_topic, {
+                        'job_id': start_message['id'],
+                        'workspace_id': start_message['workspace_id'],
+                        'id': 'cred-id-78liew',
+                        'domain': 'test-server-3',
+                        'url': 'http://test-server-3:8781/login',
+                        'key_values': {'login': 'admin', 'password': 'secret'},
+                    })
+                if all(s in {'failed', 'finished'}
+                       for s in domain_statuses.values()):
                     break
         debug('Waiting for login message...')
         login_message = next(login_consumer).value
@@ -329,17 +337,9 @@ def test_deepcrawl():
         assert login_message['job_id'] == start_message['id']
         assert login_message['workspace_id'] == start_message['workspace_id']
         assert login_message['keys'] == ['login', 'password']
-        send(crawler_service.login_input_topic, {
-            'job_id': start_message['id'],
-            'workspace_id': start_message['workspace_id'],
-            'id': 'cred-id-78liew',
-            'domain': 'test-server-3',
-            'url': 'http://test-server-3/login',
-            'key_values': {'login': 'admin', 'password': 'secret'},
-        })
         debug('Waiting for login result message...')
         login_result = next(login_result_consumer).value
-        # TODO
+        import IPython; IPython.embed()
     finally:
         send(crawler_service.input_topic,
              stop_crawl_message(start_message['id']))
