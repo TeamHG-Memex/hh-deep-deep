@@ -44,7 +44,7 @@ services:
       - -s
       - AUTOLOGIN_URL=http://autologin:8089
       - -s
-      - SCHEDULER_IDLE_BEFORE_CLOSE={idle_before_close}
+      - DD_IDLE_BEFORE_CLOSE={idle_before_close}  # not supported yet
     dns:
       - 127.0.0.1
     links:
