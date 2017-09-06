@@ -249,7 +249,7 @@ def test_deepcrawl():
         check_updates_every=2,
         max_workers=1,
         in_flight_ttl=5,
-        idle_before_close=5,
+        idle_before_close=5,  # this is not supported yet
         test_server_container=TEST_SERVER_CONTAINER,
         debug=DEBUG)
     progress_consumer, pages_consumer, login_consumer, login_result_consumer = [
@@ -274,17 +274,30 @@ def test_deepcrawl():
                  'http://test-server-3:8781/',
                  'http://no-such-domain/',
                  ],
+        'login_credentials': [
+            {'id': 'cred-id-fajfh',
+             'domain': 'test-server-1',
+             'url': 'http://test-server-1/login',
+             'key_values': {'login': 'admin', 'password': 'secret'},
+             },
+            {'id': 'cred-id-afhu',
+             'domain': 'test-server-2',
+             'url': 'http://test-server-2/login',
+             'key_values': {'login': 'admin', 'password': 'wrong'},
+             },
+        ],
         'page_limit': 1000,
     }
     send(crawler_service.input_topic, start_message)
-    expected_domains = {'test-server-1', 'test-server-2', 'test-server-3'}
+    expected_live_domains = {'test-server-1', 'test-server-2', 'test-server-3'}
+    expected_domains = expected_live_domains | {'no-such-domain'}
     try:
         while True:
             debug('Waiting for pages message...')
             pages = next(pages_consumer)
             for p in pages.value.get('page_samples'):
                 domain = p['domain']
-                assert domain in expected_domains
+                assert domain in expected_live_domains
                 assert get_domain(p['url']) == domain
             debug('Got it, now waiting for progress message...')
             progress_message = next(progress_consumer)
@@ -318,11 +331,11 @@ def test_deepcrawl():
         assert login_message['keys'] == ['login', 'password']
         send(crawler_service.login_input_topic, {
             'job_id': start_message['id'],
-            'url': 'http://news.ycombinator.com',
-            'key_values': {
-                'login': 'invalid',
-                'password': 'invalid',
-            }
+            'workspace_id': start_message['workspace_id'],
+            'id': 'cred-id-78liew',
+            'domain': 'test-server-3',
+            'url': 'http://test-server-3/login',
+            'key_values': {'login': 'admin', 'password': 'secret'},
         })
         debug('Waiting for login result message...')
         login_result = next(login_result_consumer).value

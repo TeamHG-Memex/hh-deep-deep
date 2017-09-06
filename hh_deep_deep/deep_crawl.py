@@ -1,4 +1,5 @@
 from collections import deque
+import json
 import logging
 from pathlib import Path
 import math
@@ -16,6 +17,7 @@ class DDCrawlerPaths(CrawlPaths):
         super().__init__(*args, **kwargs)
         self.out = self.root.joinpath('out')
         self.redis_conf = self.root.joinpath('redis.conf')
+        self.login_credentials = self.root.joinpath('login_credentials.json')
 
 
 class DeepCrawlerProcess(BaseDDCrawlerProcess):
@@ -23,10 +25,19 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
     paths_cls = DDCrawlerPaths
 
     def __init__(self, *args,
+                 login_credentials=None,
                  in_flight_ttl=60,
                  idle_before_close=100,
                  **kwargs):
         super().__init__(*args, **kwargs)
+        self.login_credentials = login_credentials or []
+        if self.login_credentials:
+            # convert from service API format to dd-crawler format
+            self.login_credentials = [{
+                'url': c['url'],
+                'login': c.get('login', c['key_values']['login']),
+                'password': c.get('password', c['key_values']['password']),
+            } for c in self.login_credentials]
         self.idle_before_close = idle_before_close
         self._domain_stats = {
             get_domain(url): {
@@ -61,11 +72,17 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             return
         with paths.seeds.open('rt', encoding='utf8') as f:
             seeds = [line.strip() for line in f]
+        if paths.login_credentials.exists():
+            with paths.login_credentials.open('rt', encoding='utf8') as f:
+                login_credentials = json.load(f)
+        else:
+            login_credentials = None
         return cls(
             pid=paths.pid.read_text(),
             id_=paths.id.read_text(),
             workspace_id=paths.workspace_id.read_text(),
             seeds=seeds,
+            login_credentials=login_credentials,
             root=root,
             **kwargs)
 
@@ -76,6 +93,8 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
         self.paths.workspace_id.write_text(self.workspace_id)
         self.paths.seeds.write_text(
             '\n'.join(url for url in self.seeds), encoding='utf8')
+        with self.paths.login_credentials.open('wt', encoding='utf8') as f:
+            json.dump(self.login_credentials, f)
         n_processes = multiprocessing.cpu_count()
         if self.max_workers:
             n_processes = min(self.max_workers, n_processes)
@@ -90,7 +109,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
                 proxy=self.proxy,
                 idle_before_close=self.idle_before_close,
                 **{p: self.to_host_path(getattr(self.paths, p)) for p in [
-                    'seeds', 'redis_conf', 'out',
+                    'seeds', 'redis_conf', 'out', 'login_credentials',
                 ]}
             ))
         redis_config = cur_dir.joinpath('redis.conf').read_text()

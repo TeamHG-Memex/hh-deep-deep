@@ -60,6 +60,7 @@ services:
 
   autologin:
     image: hyperiongray/autologin:0.1.4
+    external_links: {external_links}
     network_mode: bridge
     expose:
       - "8089"
