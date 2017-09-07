@@ -8,7 +8,7 @@ import subprocess
 from typing import Dict
 
 from .crawl_utils import (
-    CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower)
+    CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower, get_domain)
 
 
 class BaseDDCrawlerProcess(CrawlProcess):
@@ -18,13 +18,27 @@ class BaseDDCrawlerProcess(CrawlProcess):
     def __init__(self, *,
                  root: Path=None,
                  max_workers: int=None,
+                 login_credentials=None,
                  **kwargs):
         super().__init__(**kwargs)
         self.paths = self.paths_cls(
             root or gen_job_path(self.id_, self.jobs_root))
         self.max_workers = max_workers
         self.page_limit = self.page_limit or 10000000
+        self.login_credentials = login_credentials or []
+        if self.login_credentials:
+            # convert from service API format to dd-crawler format
+            self.login_credentials = [{
+                'url': c['url'],
+                'login': c.get('login', c['key_values']['login']),
+                'password': c.get('password', c['key_values']['password']),
+                'id': c['id'],
+            } for c in self.login_credentials]
         self._log_followers = {}  # type: Dict[Path, JsonLinesFollower]
+        self._login_cred_ids = {}  # type: Dict[str, str]
+        for c in self.login_credentials:
+            self._login_cred_ids[get_domain(c['url'])] = c['id']
+        self._login_state = {}  # type: Dict[str, str]
 
     def is_running(self):
         return self.pid is not None and is_running(self.paths.root)
@@ -38,8 +52,17 @@ class BaseDDCrawlerProcess(CrawlProcess):
         logging.info('Crawl "{}" stopped'.format(self.pid))
         self.pid = None
 
-    def handle_login(self, url, login, password):
+    def handle_login(self, *, url, login, password, cred_id):
+        self._login_cred_ids[get_domain(url)] = cred_id
         self._scrapy_command('login', url, login, password)
+
+    def _add_login_state_update(self, item, updates):
+        cred_id = self._login_cred_ids.get(get_domain(item['url']))
+        if cred_id is not None:
+            state = 'success' if item['login_success'] else 'failed'
+            if self._login_state.get(cred_id) != state:
+                updates.setdefault('login_results', []).append((cred_id, state))
+                self._login_state[cred_id] = state
 
     @property
     def external_links(self) -> str:

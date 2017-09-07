@@ -25,19 +25,10 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
     paths_cls = DDCrawlerPaths
 
     def __init__(self, *args,
-                 login_credentials=None,
                  in_flight_ttl=60,
                  idle_before_close=100,
                  **kwargs):
         super().__init__(*args, **kwargs)
-        self.login_credentials = login_credentials or []
-        if self.login_credentials:
-            # convert from service API format to dd-crawler format
-            self.login_credentials = [{
-                'url': c['url'],
-                'login': c.get('login', c['key_values']['login']),
-                'password': c.get('password', c['key_values']['password']),
-            } for c in self.login_credentials]
         self.idle_before_close = idle_before_close
         self._domain_stats = {
             get_domain(url): {
@@ -145,8 +136,10 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
                             # one domain should almost always be in one file
                             s['last_times'].append(item['time'])
                         if item.get('has_login_form'):
-                            updates.setdefault('login_urls', [])\
-                                   .append(item['url'])
+                            updates.setdefault('login_urls', []).append(
+                                item['url'])
+                        if 'login_success' in item:
+                            self._add_login_state_update(item, updates)
                     if 'domain_state' in item:
                         self._track_domain_state(item)
                 if last_items:

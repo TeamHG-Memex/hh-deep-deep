@@ -252,13 +252,15 @@ def test_deepcrawl():
         idle_before_close=5,  # this is not supported yet
         test_server_container=TEST_SERVER_CONTAINER,
         debug=DEBUG)
+    input_topics = [
+        crawler_service.output_topic('progress'),
+        crawler_service.output_topic('pages'),
+        crawler_service.login_output_topic,
+        crawler_service.login_result_topic,
+    ]
     progress_consumer, pages_consumer, login_consumer, login_result_consumer = [
         KafkaConsumer(topic, value_deserializer=decode_message)
-        for topic in [crawler_service.output_topic('progress'),
-                      crawler_service.output_topic('pages'),
-                      crawler_service.login_output_topic,
-                      crawler_service.login_result_topic,
-                      ]]
+        for topic in input_topics]
     crawler_service_thread = threading.Thread(target=crawler_service.run)
     crawler_service_thread.start()
 
@@ -328,6 +330,9 @@ def test_deepcrawl():
                         'url': 'http://test-server-3:8781/login',
                         'key_values': {'login': 'admin', 'password': 'secret'},
                     })
+                if domain_statuses['no-such-domain'] == 'failed':
+                    break
+                # TODO - ideally, wait for condition below
                 if all(s in {'failed', 'finished'}
                        for s in domain_statuses.values()):
                     break

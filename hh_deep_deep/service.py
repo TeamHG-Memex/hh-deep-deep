@@ -217,19 +217,23 @@ class Service:
             logging.info('Sending {} sample urls for "{}" to {}'
                          .format(len(page_samples), id_, pages_topic))
             self.send(pages_topic, {'id': id_, 'page_samples': page_samples})
-        login_urls = updates.get('login_urls')
-        if login_urls:
-            for url in login_urls:
-                logging.info('Sending login url for "{}" to {}: {}'
-                             .format(id_, self.login_output_topic, url))
-                self.send(self.login_output_topic, {
-                    'workspace_id': process.workspace_id,
-                    'job_id': id_,
-                    'url': url,
-                    'domain': get_domain(url),
-                    'keys': ['login', 'password'],
-                    'screenshot': None,
-                })
+        for url in updates.get('login_urls', []):
+            logging.info('Sending login url for "{}" to {}: {}'
+                         .format(id_, self.login_output_topic, url))
+            self.send(self.login_output_topic, {
+                'workspace_id': process.workspace_id,
+                'job_id': id_,
+                'url': url,
+                'domain': get_domain(url),
+                'keys': ['login', 'password'],
+                'screenshot': None,
+            })
+        for cred_id, login_result in updates.get('login_results', []):
+            logging.info(
+                'Sending login result "{}" for {} to {}'
+                .format(login_result, cred_id, self.login_result_topic))
+            self.send(self.login_result_topic,
+                      {'id': cred_id, 'result': login_result})
 
     def send_model_update(self, id_: str, new_model_data: bytes):
         encoded_model = encode_model_data(new_model_data)
@@ -259,8 +263,10 @@ class Service:
             'Passing login message for url {} to process {}'
             .format(value['url'], value['job_id']))
         params = value['key_values']
-        process.handle_login(value['url'], login=params['login'],
-                             password=params['password'])
+        process.handle_login(url=value['url'],
+                             login=params['login'],
+                             password=params['password'],
+                             cred_id=value['id'])
 
     def send(self, topic: str, result: Dict):
         message = json.dumps(result).encode('utf8')
