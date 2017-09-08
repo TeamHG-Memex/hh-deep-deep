@@ -1,0 +1,4 @@
+FROM spotify/kafka
+
+COPY kafka.server.properties $KAFKA_HOME/server.properties
+COPY kafka.consumer.properties $KAFKA_HOME/consumer.properties

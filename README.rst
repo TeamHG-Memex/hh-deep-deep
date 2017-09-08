@@ -104,33 +104,20 @@ Install test requirements::
 
     pip install -r tests/requirements.txt
 
-Start local kafka with::
-
-    docker run -it --rm --name kafka \
-        -p 2181:2181 -p 9092:9092 \
-        --env ADVERTISED_HOST=127.0.0.1 \
-        --env ADVERTISED_PORT=9092 \
-        spotify/kafka
-
-By default, kafka limits message size to 1Mb, which is too small in our case.
-In order to raise the limit, do the following in the kafka container::
-
-    docker exec -it kafka /bin/bash
-    cd /opt/kafka_*
-    echo "message.max.bytes=104857600" >> server.properties
-    echo "replica.fetch.max.bytes=104857600" >> server.properties
-    echo "fetch.message.max.bytes=104857600" >> server.properties
-    echo "fetch.message.max.bytes=104857600" >> consumer.properties
-    kill -15 `ps aux | grep kafka.Kafka | grep -v grep | awk '{print $2}'`
-    exit
-
-For some reason, pushing messages does not work after container stop/start.
-
 Build images for testing::
 
     docker build -t dd-crawler-hh -f docker/dd-crawler.docker docker/
     docker build -t deep-deep-hh -f docker/deep-deep.docker docker/
     docker build -t hh-deep-deep-test-server tests/
+    docker build -t hh-kafka -f docker/kafka.docker docker/
+
+Start kafka test server::
+
+    docker run -it --rm --name kafka \
+        -p 2181:2181 -p 9092:9092 \
+        --env ADVERTISED_HOST=127.0.0.1 \
+        --env ADVERTISED_PORT=9092 \
+        hh-kafka
 
 Start login test server::
 
