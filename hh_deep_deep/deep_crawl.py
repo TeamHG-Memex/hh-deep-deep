@@ -6,7 +6,7 @@ import math
 import multiprocessing
 import subprocess
 import time
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Tuple, Set
 
 from .crawl_utils import JsonLinesFollower, get_domain
 from .dd_utils import BaseDDCrawlerProcess, is_running
@@ -30,7 +30,8 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
         # ^^ Reversed alphabetical to have shorter urls first
         # in case of several seeds from one domain.
         # Tracking domain state:
-        self._in_flight = dict()  # type: Dict[str, float]
+        self._in_flight = dict()  # type: Dict[str, Tuple[float, List[str]]]
+        self._in_flight_domains = set()  # type: Set[str]
         self._in_flight_ttl = in_flight_ttl  # seconds
         self._have_successes = set()
         self._have_failures = set()
@@ -108,7 +109,6 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
         log_paths = list(self.paths.out.glob('*.log.jl'))
         updates = {}
         if log_paths:
-            status = 'running'
             # TODO - 'pages': sample domains first, then get last per domain
             # in order to have something for each domain
             n_last_per_file = int(math.ceil(n_last / len(log_paths)))
@@ -132,7 +132,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
                         if 'login_success' in item:
                             self._add_login_state_update(item, updates)
                     if 'domain_state' in item:
-                        self._track_domain_state(item)
+                        self._track_domain_state(item, path)
                 if last_items:
                     all_last_items.extend(last_items)
             all_last_items.sort(key=lambda x: x['time'])
@@ -141,6 +141,10 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             pages_fetched = sum(s['pages_fetched']
                                 for s in self._domain_stats.values())
             domains = self._get_domain_stats()
+            if domains and all(s['status'] != 'running' for s in domains):
+                status = 'finished'
+            else:
+                status = 'running'
             rpm = sum(d['rpm'] for d in domains)
         else:
             rpm = pages_fetched = 0
@@ -164,7 +168,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
         } for domain, s in self._domain_stats.items()]
 
     def _domain_status(self, domain: str) -> str:
-        if domain in self._open_queues or domain in self._in_flight:
+        if domain in self._open_queues or domain in self._in_flight_domains:
             return 'running'
         elif domain in self._have_successes:
             return 'finished'
@@ -173,20 +177,21 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
         else:
             return 'running'  # really "starting", but we use "running" for now
 
-    def _track_domain_state(self, item):
+    def _track_domain_state(self, item, worker_key):
         ds = item['domain_state']
         self._have_successes.update(ds['worker_successes'])
         self._have_failures.update(ds['worker_failures'])
         if item['time'] > self._open_queues_t:
             self._open_queues = ds['global_open_queues']
             self._open_queues_t = item['time']
-        for domain in ds['worker_in_flight']:
-            if domain not in self._in_flight or (
-                    self._in_flight[domain] < item['time']):
-                self._in_flight[domain] = item['time']
+        self._in_flight[worker_key] = (item['time'], ds['worker_in_flight'])
         now = time.time()
-        self._in_flight = {domain: t for domain, t in self._in_flight.items()
-                           if now - t < self._in_flight_ttl}
+        self._in_flight = {
+            key: (t, domains) for key, (t, domains) in self._in_flight.items()
+            if now - t < self._in_flight_ttl}
+        self._in_flight_domains = {
+            domain for _, domains in self._in_flight.values()
+            for domain in domains}
 
 
 def get_rpm(last_times):

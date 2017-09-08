@@ -307,6 +307,7 @@ def test_deepcrawl():
             debug('Got it:', progress_message.value.get('progress'))
             progress = progress_message.value['progress']
             if progress and progress['domains']:
+                assert progress['status'] in {'running', 'finished'}
                 domain_statuses = dict()
                 for d in progress['domains']:
                     domain = get_domain(d['url'])
@@ -322,6 +323,8 @@ def test_deepcrawl():
                 assert set(domain_statuses) == expected_domains
                 if not sent_login:
                     sent_login = True
+                    # this message is not delivered in time at the moment
+                    # TODO maybe increase download delay?
                     send(crawler_service.login_input_topic, {
                         'job_id': start_message['id'],
                         'workspace_id': start_message['workspace_id'],
@@ -330,11 +333,9 @@ def test_deepcrawl():
                         'url': 'http://test-server-3:8781/login',
                         'key_values': {'login': 'admin', 'password': 'secret'},
                     })
-                if domain_statuses['no-such-domain'] == 'failed':
-                    break
-                # TODO - ideally, wait for condition below
                 if all(s in {'failed', 'finished'}
                        for s in domain_statuses.values()):
+                    assert progress['status'] == 'finished'
                     break
         debug('Waiting for login message...')
         login_message = next(login_consumer).value
