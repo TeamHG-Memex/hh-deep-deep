@@ -344,7 +344,7 @@ def test_deepcrawl():
         assert login_message['keys'] == ['login', 'password']
         debug('Waiting for login result message...')
         login_result = next(login_result_consumer).value
-        import IPython; IPython.embed()
+        # TODO - check it
     finally:
         send(crawler_service.input_topic,
              stop_crawl_message(start_message['id']))

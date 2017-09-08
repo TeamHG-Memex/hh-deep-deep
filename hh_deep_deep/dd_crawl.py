@@ -1,4 +1,5 @@
 from collections import deque
+import json
 import logging
 from pathlib import Path
 import re
@@ -8,16 +9,14 @@ import subprocess
 from typing import Any, Dict, Optional, List, Set
 
 from .crawl_utils import CrawlPaths, JsonLinesFollower, get_domain
-from .dd_utils import BaseDDCrawlerProcess, is_running
+from .dd_utils import BaseDDPaths, BaseDDCrawlerProcess, is_running
 
 
-class DDCrawlerPaths(CrawlPaths):
+class DDCrawlerPaths(BaseDDPaths):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.page_clf = self.root.joinpath('page_clf.joblib')
         self.link_clf = self.root.joinpath('Q.joblib')
-        self.out = self.root.joinpath('out')
-        self.redis_conf = self.root.joinpath('redis.conf')
 
 
 class DDCrawlerProcess(BaseDDCrawlerProcess):
@@ -38,7 +37,7 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
     def load_running(cls, root: Path, **kwargs) -> Optional['DDCrawlerProcess']:
         """ Initialize a process from a directory.
         """
-        paths = DDCrawlerPaths(root)
+        paths = cls.paths_cls(root)
         if not all(p.exists() for p in [
                 paths.pid, paths.id, paths.seeds, paths.page_clf,
                 paths.link_clf, paths.workspace_id]):
@@ -51,11 +50,17 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
             return
         with paths.seeds.open('rt', encoding='utf8') as f:
             seeds = [line.strip() for line in f]
+        if paths.login_credentials.exists():
+            with paths.login_credentials.open('rt', encoding='utf8') as f:
+                login_credentials = json.load(f)
+        else:
+            login_credentials = None
         return cls(
             pid=paths.pid.read_text(),
             id_=paths.id.read_text(),
             workspace_id=paths.workspace_id.read_text(),
             seeds=seeds,
+            login_credentials=login_credentials,
             page_clf_data=paths.page_clf.read_bytes(),
             link_clf_data=paths.link_clf.read_bytes(),
             root=root,
@@ -70,6 +75,8 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
         self.paths.link_clf.write_bytes(self.link_clf_data)
         self.paths.seeds.write_text(
             '\n'.join(url for url in self.seeds), encoding='utf8')
+        with self.paths.login_credentials.open('wt', encoding='utf8') as f:
+            json.dump(self.login_credentials, f)
         n_processes = multiprocessing.cpu_count()
         if self.max_workers:
             n_processes = min(self.max_workers, n_processes)
@@ -86,7 +93,7 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
                 proxy=self.proxy,
                 **{p: self.to_host_path(getattr(self.paths, p)) for p in [
                     'seeds', 'page_clf', 'link_clf', 'redis_conf', 'out',
-                    'models',
+                    'models', 'login_credentials',
                 ]}
             ))
         redis_config = cur_dir.joinpath('redis.conf').read_text()
@@ -122,7 +129,10 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
                 for item in follower.get_new_items(at_least_last=True):
                     if item.get('has_login_form'):
                         updates.setdefault('login_urls', []).append(item['url'])
-                    last_items.append(item)
+                    if 'login_success' in item:
+                        self._add_login_state_update(item, updates)
+                    if 'url' in item:
+                        last_items.append(item)
                 if last_items:
                     all_last_items.extend(last_items)
                     last = last_items[-1]

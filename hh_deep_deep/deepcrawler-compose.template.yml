@@ -51,8 +51,6 @@ services:
       - AUTOLOGIN_URL=http://autologin:8089
       - -s
       - DD_IDLE_BEFORE_CLOSE={idle_before_close}  # not supported yet
-      - -s
-      - LOG_LEVEL=DEBUG
     dns:
       - 127.0.0.1
     links:

@@ -8,21 +8,12 @@ import subprocess
 import time
 from typing import Any, Dict, Optional, List
 
-from .crawl_utils import CrawlPaths, JsonLinesFollower, get_domain
+from .crawl_utils import JsonLinesFollower, get_domain
 from .dd_utils import BaseDDCrawlerProcess, is_running
-
-
-class DDCrawlerPaths(CrawlPaths):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.out = self.root.joinpath('out')
-        self.redis_conf = self.root.joinpath('redis.conf')
-        self.login_credentials = self.root.joinpath('login_credentials.json')
 
 
 class DeepCrawlerProcess(BaseDDCrawlerProcess):
     _jobs_root = Path('deep-jobs')
-    paths_cls = DDCrawlerPaths
 
     def __init__(self, *args,
                  in_flight_ttl=60,
@@ -51,7 +42,7 @@ class DeepCrawlerProcess(BaseDDCrawlerProcess):
             cls, root: Path, **kwargs) -> Optional['DeepCrawlerProcess']:
         """ Initialize a process from a directory.
         """
-        paths = DDCrawlerPaths(root)
+        paths = cls.paths_cls(root)
         if not all(p.exists() for p in [
                 paths.pid, paths.id, paths.seeds, paths.workspace_id]):
             return

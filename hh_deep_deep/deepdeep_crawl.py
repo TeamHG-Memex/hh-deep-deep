@@ -21,6 +21,7 @@ class DeepDeepPaths(CrawlPaths):
 class DeepDeepProcess(CrawlProcess):
     _jobs_root = Path('deep-deep-jobs')
     default_docker_image = 'deep-deep-hh'
+    path_cls = DeepDeepPaths
 
     def __init__(self, *,
                  page_clf_data: bytes,
@@ -29,7 +30,7 @@ class DeepDeepProcess(CrawlProcess):
                  **kwargs):
         super().__init__(**kwargs)
         self.page_limit = self.page_limit or 10000
-        self.paths = DeepDeepPaths(
+        self.paths = self.path_cls(
             root or gen_job_path(self.id_, self.jobs_root))
         self.log_follower = JsonLinesFollower(self.paths.items)
         self.page_clf_data = page_clf_data
@@ -41,7 +42,7 @@ class DeepDeepProcess(CrawlProcess):
     def load_running(cls, root: Path, **kwargs) -> Optional['DeepDeepProcess']:
         """ Initialize a process from a directory.
         """
-        paths = DeepDeepPaths(root)
+        paths = cls.path_cls(root)
         if not all(p.exists() for p in [paths.pid, paths.id, paths.seeds,
                                         paths.page_clf, paths.workspace_id]):
             return

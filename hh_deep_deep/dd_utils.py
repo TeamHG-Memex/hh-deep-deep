@@ -11,9 +11,17 @@ from .crawl_utils import (
     CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower, get_domain)
 
 
+class BaseDDPaths(CrawlPaths):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.out = self.root.joinpath('out')
+        self.redis_conf = self.root.joinpath('redis.conf')
+        self.login_credentials = self.root.joinpath('login_credentials.json')
+
+
 class BaseDDCrawlerProcess(CrawlProcess):
     default_docker_image = 'dd-crawler-hh'
-    paths_cls = CrawlPaths
+    paths_cls = BaseDDPaths
 
     def __init__(self, *,
                  root: Path=None,
