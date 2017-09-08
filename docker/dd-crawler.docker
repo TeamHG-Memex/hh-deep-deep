@@ -1,5 +1,5 @@
-FROM dd-crawler
-# FROM hyperiongray/dd-crawler:0.3.4
+# FROM dd-crawler
+FROM hyperiongray/dd-crawler:0.3.5
 # ^^ update hyperiongray/dd-crawler-hh as well (image and docker-compose.yml)
 
 COPY xgboost-0.6a2-cp35-none-any.whl .
