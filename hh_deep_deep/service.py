@@ -87,10 +87,8 @@ class Service:
             logging.info('No crawls running')
 
     def _kafka_consumer(self, topic, consumer_timeout_ms=10, **kwargs):
-        return KafkaConsumer(
-            topic, group_id='{}-group'.format(topic),
-            consumer_timeout_ms=consumer_timeout_ms,
-            **kwargs)
+        return KafkaConsumer(topic, consumer_timeout_ms=consumer_timeout_ms,
+                             **kwargs)
 
     def run(self) -> None:
         counter = 0
@@ -100,7 +98,6 @@ class Service:
                 for value in self._read_consumer(self.consumer):
                     if value == {'from-tests': 'stop'}:
                         logging.info('Got message to stop (from tests)')
-                        self.consumer.commit()
                         return
                     elif all(value.get(key) is not None
                              for key in self.required_keys):
@@ -118,7 +115,6 @@ class Service:
                 if counter % self.check_updates_every == 0:
                     executor.submit(self.send_updates)
                 self.producer.flush()
-                self.consumer.commit()
 
     def _read_consumer(self, consumer):
         if consumer is None:
