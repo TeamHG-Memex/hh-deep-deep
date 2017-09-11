@@ -94,6 +94,7 @@ class Service:
 
     def run(self) -> None:
         counter = 0
+        updates_futures = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             while True:
                 counter += 1
@@ -115,7 +116,11 @@ class Service:
                     for value in self._read_consumer(self.login_consumer):
                         executor.submit(self.handle_login, value)
                 if counter % self.check_updates_every == 0:
-                    executor.submit(self.send_updates)
+                    updates_futures = [f for f in updates_futures
+                                       if not f.done()]
+                    if not updates_futures:
+                        updates_futures.append(
+                            executor.submit(self.send_updates))
                 self.producer.flush()
 
     def _read_consumer(self, consumer):
