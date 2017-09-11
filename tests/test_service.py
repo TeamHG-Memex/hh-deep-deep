@@ -45,7 +45,6 @@ def test_service():
 def _test_service(run_trainer, run_crawler):
     # This is a big integration test, better run with "-s"
 
-    job_id = 'test-id'  # FIXME?
     ws_id = 'test-ws-id'
     producer = KafkaProducer(value_serializer=encode_message)
 
@@ -132,14 +131,18 @@ def _check_progress_pages(progress_consumer, pages_consumer,
 def _test_crawler_service(
         start_message: Dict, send: Callable[[str, Dict], None]) -> None:
     start_message['broadness'] = 'N10'
+    start_message['id'] = 'test-id'
     crawler_service = ATestService(
         'crawler', check_updates_every=2, max_workers=2, debug=DEBUG)
-    progress_consumer, pages_consumer = [
+    progress_consumer, pages_consumer = consumers = [
         KafkaConsumer(crawler_service.output_topic(kind),
                       value_deserializer=decode_message)
         for kind in ['progress', 'pages']]
     login_consumer = KafkaConsumer(crawler_service.login_output_topic,
                                    value_deserializer=decode_message)
+    consumers.append(login_consumer)
+    for c in consumers:
+        c.poll(timeout_ms=10)
     crawler_service_thread = threading.Thread(target=crawler_service.run)
     crawler_service_thread.start()
 
@@ -147,7 +150,12 @@ def _test_crawler_service(
     send(crawler_service.input_topic, start_message)
     try:
         _check_progress_pages(progress_consumer, pages_consumer)
-        # FIXME - this should be sent after getting login message
+        debug('Waiting for login message...')
+        login_message = next(login_consumer).value
+        debug('Got login message for {}'.format(login_message['url']))
+        assert login_message['job_id'] == start_message['id']
+        assert login_message['workspace_id'] == start_message['workspace_id']
+        assert login_message['keys'] == ['login', 'password']
         send(crawler_service.login_input_topic, {
             'job_id': start_message['id'],
             'url': 'http://news.ycombinator.com',
@@ -156,12 +164,7 @@ def _test_crawler_service(
                 'password': 'invalid',
             }
         })
-        debug('Waiting for login message...')
-        login_message = next(login_consumer).value
-        debug('Got login message for {}'.format(login_message['url']))
-        assert login_message['job_id'] == start_message['id']
-        assert login_message['workspace_id'] == start_message['workspace_id']
-        assert login_message['keys'] == ['login', 'password']
+        # TODO - wait for status message
     finally:
         send(crawler_service.input_topic, stop_crawl_message(start_message['id']))
         send(crawler_service.input_topic, {'from-tests': 'stop'})
