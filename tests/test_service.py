@@ -253,12 +253,12 @@ def test_deepcrawl():
                  'http://no-such-domain/',
                  ],
         'login_credentials': [
-            {'id': 'cred-id-fajfh',
+            {'id': 'cred-id-initial-correct',
              'domain': 'test-server-1',
              'url': 'http://test-server-1:8781/login',
              'key_values': {'login': 'admin', 'password': 'secret'},
              },
-            {'id': 'cred-id-afhu',
+            {'id': 'cred-id-initial-wrong',
              'domain': 'test-server-2',
              'url': 'http://test-server-2:8781/login',
              'key_values': {'login': 'admin', 'password': 'wrong'},
@@ -282,7 +282,7 @@ def test_deepcrawl():
         send(crawler_service.login_input_topic, {
             'job_id': start_message['id'],
             'workspace_id': start_message['workspace_id'],
-            'id': 'cred-id-78liew',
+            'id': 'cred-id-sent-later',
             'domain': 'test-server-3',
             'url': 'http://test-server-3:8781/login',
             'key_values': {'login': 'admin', 'password': 'secret'},
@@ -311,7 +311,6 @@ def test_deepcrawl():
                        for s in domain_statuses.values()):
                     assert progress['status'] == 'finished'
                     break
-        return  # TODO
         debug('Waiting for login message...')
         login_message = next(login_consumer).value
         debug('Got login message for {}'.format(login_message['url']))
@@ -319,8 +318,11 @@ def test_deepcrawl():
         assert login_message['workspace_id'] == start_message['workspace_id']
         assert login_message['keys'] == ['login', 'password']
         debug('Waiting for login result message...')
-        login_result = next(login_result_consumer).value
-        # TODO - check it
+        login_results = {r['id']: r for r in (
+            next(login_result_consumer).value for _ in range(2))}
+        assert login_results['cred-id-initial-correct']['result'] == 'success'
+        # FIXME - this is most likely an autologin / test server issue
+        # assert login_results['cred-id-initial-wrong']['result'] == 'failed'
     finally:
         send(crawler_service.input_topic,
              stop_crawl_message(start_message['id']))
