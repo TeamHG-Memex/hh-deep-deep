@@ -53,14 +53,14 @@ def _test_service(run_trainer, run_crawler):
         producer.flush()
 
     start_crawler_message = None
-    start_message_path = Path('.tst.start-dd-crawl.pkl')
+    start_message_path = Path('.tst.start-crawler.pkl')
     if not run_trainer:
         if start_message_path.exists():
             with start_message_path.open('rb') as f:
                 start_crawler_message = pickle.load(f)
-                debug('Loaded cached start dd_crawl message')
+                debug('Loaded cached start crawler message')
         else:
-            debug('No cached start dd_crawl message found, must run deepdeep')
+            debug('No cached start dd_crawl message found, must run trainer')
             run_trainer = True
     if run_trainer:
         start_crawler_message = _test_trainer_service(ws_id, send)
@@ -134,14 +134,11 @@ def _test_crawler_service(
     start_message['id'] = 'test-id'
     crawler_service = ATestService(
         'crawler', check_updates_every=2, max_workers=2, debug=DEBUG)
-    progress_consumer, pages_consumer = consumers = [
-        KafkaConsumer(crawler_service.output_topic(kind),
-                      value_deserializer=decode_message)
-        for kind in ['progress', 'pages']]
-    login_consumer = KafkaConsumer(crawler_service.login_output_topic,
-                                   value_deserializer=decode_message)
-    consumers.append(login_consumer)
-    for c in consumers:
+    C = lambda t: KafkaConsumer(t, value_deserializer=decode_message)
+    progress_consumer = C(crawler_service.output_topic('progress'))
+    pages_consumer = C(crawler_service.output_topic('pages'))
+    login_consumer = C(crawler_service.login_output_topic)
+    for c in [progress_consumer, pages_consumer, login_consumer]:
         c.poll(timeout_ms=10)
     crawler_service_thread = threading.Thread(target=crawler_service.run)
     crawler_service_thread.start()
@@ -164,7 +161,7 @@ def _test_crawler_service(
                 'password': 'invalid',
             }
         })
-        # TODO - wait for status message
+        # TODO - wait for login status message
     finally:
         send(crawler_service.input_topic, stop_crawl_message(start_message['id']))
         send(crawler_service.input_topic, {'from-tests': 'stop'})
