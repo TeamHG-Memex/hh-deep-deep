@@ -28,24 +28,24 @@ class ATestService(Service):
 
 
 @pytest.mark.slow
-def test_service_deepdeep():
-    _test_service(run_deepdeep=True, run_dd_crawl=False)
+def test_trainer_service():
+    _test_service(run_trainer=True, run_crawler=False)
 
 
 @pytest.mark.slow
-def test_service_dd_crawl():
-    _test_service(run_deepdeep=False, run_dd_crawl=True)
+def test_crawler_service():
+    _test_service(run_trainer=False, run_crawler=True)
 
 
 @pytest.mark.slow
 def test_service():
-    _test_service(run_deepdeep=True, run_dd_crawl=True)
+    _test_service(run_trainer=True, run_crawler=True)
 
 
-def _test_service(run_deepdeep, run_dd_crawl):
+def _test_service(run_trainer, run_crawler):
     # This is a big integration test, better run with "-s"
 
-    job_id = 'test-id'
+    job_id = 'test-id'  # FIXME?
     ws_id = 'test-ws-id'
     producer = KafkaProducer(value_serializer=encode_message)
 
@@ -55,55 +55,59 @@ def _test_service(run_deepdeep, run_dd_crawl):
 
     start_crawler_message = None
     start_message_path = Path('.tst.start-dd-crawl.pkl')
-    if not run_deepdeep:
+    if not run_trainer:
         if start_message_path.exists():
             with start_message_path.open('rb') as f:
                 start_crawler_message = pickle.load(f)
                 debug('Loaded cached start dd_crawl message')
         else:
             debug('No cached start dd_crawl message found, must run deepdeep')
-            run_deepdeep = True
-    if run_deepdeep:
-        start_crawler_message = _test_trainer_service(job_id, ws_id, send)
+            run_trainer = True
+    if run_trainer:
+        start_crawler_message = _test_trainer_service(ws_id, send)
         with start_message_path.open('wb') as f:
             pickle.dump(start_crawler_message, f)
     assert start_crawler_message is not None
 
-    if run_dd_crawl:
+    if run_crawler:
         _test_crawler_service(start_crawler_message, send)
 
 
-def _test_trainer_service(job_id: str, ws_id: str,
+def _test_trainer_service(ws_id: str,
                           send: Callable[[str, Dict], None]) -> Dict:
     """ Test trainer service, return start message for crawler service.
     """
     trainer_service = ATestService(
         'trainer', checkpoint_interval=50, check_updates_every=2, debug=DEBUG)
-    progress_consumer, pages_consumer, model_consumer = [
+    progress_consumer, pages_consumer, model_consumer = consumers = [
         KafkaConsumer(trainer_service.output_topic(kind),
                       value_deserializer=decode_message)
         for kind in ['progress', 'pages', 'model']]
+    for c in consumers:
+        c.poll(timeout_ms=10)
+
     trainer_service_thread = threading.Thread(target=trainer_service.run)
     trainer_service_thread.start()
 
     debug('Sending start trainer message')
-    send(trainer_service.input_topic, start_trainer_message(job_id + '-early', ws_id))
+    send(trainer_service.input_topic, start_trainer_message(ws_id))
     time.sleep(2)
-    start_message = start_trainer_message(job_id, ws_id)
+    start_message = start_trainer_message(ws_id)
     debug('Sending another start trainer message (old should stop)')
     send(trainer_service.input_topic, start_message)
     try:
         _check_progress_pages(progress_consumer, pages_consumer,
                               check_trainer=True)
         debug('Waiting for model, this might take a while...')
+        # this is not part of the API, but it's convenient for tests
         model_message = next(model_consumer).value
         debug('Got it.')
-        assert model_message['id'] == job_id
+        assert model_message['workspace_id'] == ws_id
         link_model = model_message['link_model']
 
     finally:
-        send(trainer_service.input_topic, stop_crawl_message(job_id))
-        send(trainer_service.input_topic, stop_crawl_message(job_id + '-early'))
+        # this is not part of the API, but it's convenient for tests
+        send(trainer_service.input_topic, stop_crawl_message(ws_id))
         send(trainer_service.input_topic, {'from-tests': 'stop'})
         trainer_service_thread.join()
 
@@ -170,7 +174,10 @@ def debug(arg, *args: List[str]) -> None:
 
 def check_progress(message):
     value = message.value
-    assert value['id'] == 'test-id'
+    if 'id' in value:
+        assert value['id'] == 'test-id'
+    else:
+        assert value['workspace_id'] == 'test-ws-id'
     progress = value['progress']
     if progress not in {
             'Crawl is not running yet', 'Crawl started, no updates yet'}:
@@ -185,7 +192,10 @@ def check_progress(message):
 
 def check_pages(message):
     value = message.value
-    assert value['id'] in {'test-id', 'test-id-early'}
+    if 'id' in value:
+        assert value['id'] == 'test-id'
+    else:
+        assert value['workspace_id'] == 'test-ws-id'
     page_samples = value['page_samples']
     assert len(page_samples) >= 1
     for s in page_samples:
@@ -194,7 +204,7 @@ def check_pages(message):
         assert s['url'].startswith('http')
 
 
-def start_trainer_message(id_: str, ws_id: str) -> Dict:
+def start_trainer_message(ws_id: str) -> Dict:
     model = DefaultModel()
     model.fit(
         [{'url': 'http://a.com', 'text': text}
@@ -202,7 +212,6 @@ def start_trainer_message(id_: str, ws_id: str) -> Dict:
                       'what a mess', 'who invented it', 'so boring', 'stupid']],
         [1, 1, 1, 0, 0, 0, 0])
     return {
-        'id': id_,
         'workspace_id': ws_id,
         'page_model': encode_model_data(pickle.dumps(model)),
         'urls': ['http://wikipedia.org', 'http://news.ycombinator.com'],

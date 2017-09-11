@@ -39,6 +39,7 @@ class CrawlPaths:
 
 
 class CrawlProcess:
+    id_field = 'id'
     _jobs_root = None
     default_docker_image = None
     target_sample_rate_pm = 10  # per minute

@@ -19,6 +19,7 @@ class DeepDeepPaths(CrawlPaths):
 
 
 class DeepDeepProcess(CrawlProcess):
+    id_field = 'workspace_id'
     _jobs_root = Path('deep-deep-jobs')
     default_docker_image = 'deep-deep-hh'
     path_cls = DeepDeepPaths

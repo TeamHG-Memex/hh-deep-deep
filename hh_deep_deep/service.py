@@ -31,10 +31,10 @@ class Service:
                  **crawler_process_kwargs):
         # some config depending on the queue kind
         self.queue_kind = queue_kind
-        self.required_keys = ['id', 'workspace_id', 'urls'] + {
+        self.required_keys = ['workspace_id', 'urls'] + {
             'trainer': ['page_model'],
-            'crawler': ['page_model', 'link_model'],
-            'deepcrawler': [],
+            'crawler': ['id', 'page_model', 'link_model'],
+            'deepcrawler': ['id'],
             }[queue_kind]
         self.process_class = {
             'trainer': DeepDeepProcess,
@@ -57,7 +57,7 @@ class Service:
         logging.info('Listening on {} topic'.format(self.input_topic))
         self.consumer = self._kafka_consumer(
             self.input_topic,
-            consumer_timeout_ms=200,
+            consumer_timeout_ms=100,
             max_partition_fetch_bytes=self.max_message_size,
             **kafka_kwargs)
         if self.supports_login:
@@ -85,6 +85,8 @@ class Service:
                             root=process.paths.root))
         else:
             logging.info('No crawls running')
+
+        self.previous_progress = {}  # type: Dict[CrawlProcess, Dict[str, Any]]
 
     def _kafka_consumer(self, topic, consumer_timeout_ms=10, **kwargs):
         return KafkaConsumer(topic, consumer_timeout_ms=consumer_timeout_ms,
@@ -130,10 +132,10 @@ class Service:
 
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
-        id_ = request['id']
         workspace_id = request['workspace_id']
-        logging.info('Got start crawl message with id "{id}", {n_seeds} seeds.'
-                     .format(id=id_, n_seeds=len(request['urls'])))
+        id_ = request['id'] if 'id' in request else workspace_id
+        logging.info('Got start crawl message with id "{id}", {n_urls} urls.'
+                     .format(id=id_, n_urls=len(request['urls'])))
         if self.single_crawl:
             # stop all running processes for this workspace
             # (should be at most 1 usually)
@@ -153,8 +155,8 @@ class Service:
         optional_fields = ['page_limit', 'broadness', 'login_credentials']
         kwargs.update({field: request[field] for field in optional_fields
                        if field in request})
-        process = self.process_class(
-            id_=id_, workspace_id=workspace_id, **kwargs)
+        process = self.process_class(id_=id_, workspace_id=workspace_id,
+                                     **kwargs)
         process.start()
         self.running[id_] = process
 
@@ -184,7 +186,7 @@ class Service:
             if hasattr(process, 'get_new_model'):
                 new_model_data = process.get_new_model()
                 if new_model_data:
-                    self.send_model_update(id_, new_model_data)
+                    self.send_model_update(process.workspace_id, new_model_data)
             if send_stopped:
                 self.send_stopped_message(process)
 
@@ -198,13 +200,15 @@ class Service:
         progress = updates.get('progress')
         if progress is not None:
             progress_topic = self.output_topic('progress')
-            logging.info('Sending update for "{}" to {}: {}'
-                         .format(id_, progress_topic, progress))
-            progress_message = {'id': id_, 'progress': progress}
+            progress_message = {process.id_field: id_, 'progress': progress}
             if self.needs_percentage_done:
                 progress_message['percentage_done'] = \
                     updates.get('percentage_done', 0)
-            self.send(progress_topic, progress_message)
+            if progress_message != self.previous_progress.get(process):
+                logging.info('Sending update for "{}" to {}: {}'
+                             .format(id_, progress_topic, progress_message))
+                self.previous_progress[process] = progress_message
+                self.send(progress_topic, progress_message)
         page_samples = updates.get('pages')
         if page_samples:
             for p in page_samples:
@@ -212,7 +216,8 @@ class Service:
             pages_topic = self.output_topic('pages')
             logging.info('Sending {} sample urls for "{}" to {}'
                          .format(len(page_samples), id_, pages_topic))
-            self.send(pages_topic, {'id': id_, 'page_samples': page_samples})
+            self.send(pages_topic,
+                      {process.id_field: id_, 'page_samples': page_samples})
         for url in updates.get('login_urls', []):
             logging.info('Sending login url for "{}" to {}: {}'
                          .format(id_, self.login_output_topic, url))
@@ -231,12 +236,12 @@ class Service:
             self.send(self.login_result_topic,
                       {'id': cred_id, 'result': login_result})
 
-    def send_model_update(self, id_: str, new_model_data: bytes):
+    def send_model_update(self, ws_id: str, new_model_data: bytes):
         encoded_model = encode_model_data(new_model_data)
         topic = self.output_topic('model')
         logging.info('Sending new model to {}, model size {:,} bytes'
                      .format(topic, len(encoded_model)))
-        self.send(topic, {'id': id_, 'link_model': encoded_model})
+        self.send(topic, {'workspace_id': ws_id, 'link_model': encoded_model})
 
     def send_stopped_message(self, process: CrawlProcess):
         self.send('events-input', {
