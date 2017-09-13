@@ -22,6 +22,7 @@ class Service:
     queue_prefix = ''
     jobs_prefix = ''
     max_message_size = 104857600
+    group_id = 'hh-deep-deep'
 
     def __init__(self,
                  queue_kind: str,
@@ -89,8 +90,11 @@ class Service:
         self.previous_progress = {}  # type: Dict[CrawlProcess, Dict[str, Any]]
 
     def _kafka_consumer(self, topic, consumer_timeout_ms=10, **kwargs):
-        return KafkaConsumer(topic, consumer_timeout_ms=consumer_timeout_ms,
-                             **kwargs)
+        return KafkaConsumer(
+            topic,
+            group_id=self.group_id,
+            consumer_timeout_ms=consumer_timeout_ms,
+            **kwargs)
 
     def run(self) -> None:
         counter = 0

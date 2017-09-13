@@ -25,6 +25,7 @@ TEST_SERVER_CONTAINER = 'hh-deep-deep-test-server'
 class ATestService(Service):
     queue_prefix = 'test-'
     jobs_prefix = 'tests'
+    group_id = None  # this massively simplifies testing
 
 
 @pytest.mark.slow
