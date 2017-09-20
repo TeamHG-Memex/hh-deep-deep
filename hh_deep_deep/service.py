@@ -48,7 +48,7 @@ class Service:
 
         kafka_kwargs = {}
         if kafka_host is not None:
-            kafka_kwargs['hosts'] = kafka_host
+            kafka_kwargs['hosts'] = '{}:9092'.format(kafka_host)
         self.kafka_client = pykafka.KafkaClient(**kafka_kwargs)
 
         # Together with consumer_timeout_ms, this defines responsiveness.
@@ -143,8 +143,6 @@ class Service:
     def _read_consumer(self, consumer: pykafka.SimpleConsumer):
         if consumer is None:
             return
-        logging.info('Reading consumer for topic {}'
-                     .format(consumer.topic.name))
         for message in consumer:
             self._debug_save_message(message.value, 'incoming')
             try:
@@ -155,8 +153,6 @@ class Service:
                               exc_info=e)
         if self.group_id:
             consumer.commit_offsets()
-        logging.info('Done reading consumer for topic {}'
-                     .format(consumer.topic.name))
 
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
