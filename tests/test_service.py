@@ -9,6 +9,7 @@ from typing import Dict, Callable, List
 from hh_page_clf.models import DefaultModel
 import kafka.client
 import pykafka
+from pykafka.common import OffsetType
 import pytest
 
 from hh_deep_deep.service import (
@@ -28,7 +29,7 @@ TEST_SERVER_CONTAINER = 'hh-deep-deep-test-server'
 class ATestService(Service):
     queue_prefix = 'test-'
     jobs_prefix = 'tests'
-    group_id = None  # this massively simplifies testing
+    reset_to_last = True
 
 
 @pytest.fixture
@@ -278,7 +279,9 @@ def test_deepcrawl(kafka_client: pykafka.KafkaClient):
         test_server_container=TEST_SERVER_CONTAINER,
         debug=DEBUG)
 
-    C = lambda t: kafka_client.topics[_to_bytes(t)].get_simple_consumer()
+    C = lambda t: kafka_client.topics[_to_bytes(t)].get_simple_consumer(
+        auto_offset_reset=OffsetType.LATEST,
+        reset_offset_on_start=True)
     P = lambda t: kafka_client.topics[_to_bytes(t)].get_sync_producer()
 
     progress_consumer = C(crawler_service.output_topic('progress'))

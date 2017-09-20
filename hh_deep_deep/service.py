@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 import zlib
 
 import pykafka
+from pykafka.common import OffsetType
 
 from .crawl_utils import CrawlProcess, get_domain
 from .deepdeep_crawl import DeepDeepProcess
@@ -23,6 +24,7 @@ class Service:
     jobs_prefix = ''
     max_message_size = 104857600
     group_id = 'hh-deep-deep-{}'
+    reset_to_last = False
 
     def __init__(self,
                  queue_kind: str,
@@ -98,14 +100,20 @@ class Service:
 
     def _kafka_consumer(self, topic, consumer_timeout_ms=10,
                         ) -> pykafka.SimpleConsumer:
+        kwargs = {}
+        if self.reset_to_last:
+            kwargs.update(dict(
+                auto_offset_reset=OffsetType.LATEST,
+                reset_offset_on_start=True
+            ))
         return (
             self._kafka_topic(topic)
             .get_simple_consumer(
                 consumer_group=(
-                    self.group_id.format(self.queue_kind).encode('ascii')
-                    if self.group_id else None),
+                    self.group_id.format(self.queue_kind).encode('ascii')),
                 consumer_timeout_ms=consumer_timeout_ms,
                 fetch_message_max_bytes=self.max_message_size,
+                **kwargs
             ))
 
     def _kafka_producer(self, topic: str) -> pykafka.Producer:
@@ -153,8 +161,7 @@ class Service:
                 logging.error('Error decoding message: {}'
                               .format(repr(message.value)),
                               exc_info=e)
-        if self.group_id:
-            consumer.commit_offsets()
+        consumer.commit_offsets()
 
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
