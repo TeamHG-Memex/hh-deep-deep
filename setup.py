@@ -7,7 +7,7 @@ setup(
     packages=['hh_deep_deep'],
     include_package_data=True,
     install_requires=[
-        'kafka-python==1.3.3',
+        'pykafka==2.6.0',
         'tldextract',
     ],
     entry_points = {

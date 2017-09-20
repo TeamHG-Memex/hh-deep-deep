@@ -9,7 +9,7 @@ import time
 from typing import Any, Dict, Optional
 import zlib
 
-from kafka import KafkaConsumer, KafkaProducer
+import pykafka
 
 from .crawl_utils import CrawlProcess, get_domain
 from .deepdeep_crawl import DeepDeepProcess
@@ -22,7 +22,7 @@ class Service:
     queue_prefix = ''
     jobs_prefix = ''
     max_message_size = 104857600
-    group_id = 'hh-deep-deep'
+    group_id = 'hh-deep-deep-{}'
 
     def __init__(self,
                  queue_kind: str,
@@ -48,7 +48,9 @@ class Service:
 
         kafka_kwargs = {}
         if kafka_host is not None:
-            kafka_kwargs['bootstrap_servers'] = kafka_host
+            kafka_kwargs['hosts'] = kafka_host
+        self.kafka_client = pykafka.KafkaClient(**kafka_kwargs)
+
         # Together with consumer_timeout_ms, this defines responsiveness.
         self.check_updates_every = check_updates_every
         self.debug = debug
@@ -57,20 +59,20 @@ class Service:
         self.input_topic = topic('dd-{}-input'.format(self.queue_kind))
         logging.info('Listening on {} topic'.format(self.input_topic))
         self.consumer = self._kafka_consumer(
-            self.input_topic,
-            consumer_timeout_ms=100,
-            max_partition_fetch_bytes=self.max_message_size,
-            **kafka_kwargs)
+            self.input_topic, consumer_timeout_ms=100)
+        self.progress_producer = (
+            self._kafka_producer(self.output_topic('progress')))
+        self.pages_producer = (
+            self._kafka_producer(self.output_topic('pages')))
+        self.model_producer = (
+            self._kafka_producer(self.output_topic('model')))
+        self.events_producer = self._kafka_producer('events-input')
         if self.supports_login:
-            self.login_output_topic = topic('dd-login-input')
-            self.login_input_topic = topic('dd-login-output')
-            self.login_result_topic = topic('dd-login-result')
-            self.login_consumer = self._kafka_consumer(
-                self.login_input_topic, **kafka_kwargs)
-
-        self.producer = KafkaProducer(
-            max_request_size=self.max_message_size,
-            **kafka_kwargs)
+            self.login_consumer = self._kafka_consumer(topic('dd-login-output'))
+            self.login_output_producer = (
+                self._kafka_producer(topic('dd-login-input')))
+            self.login_result_producer = (
+                self._kafka_producer(topic('dd-login-result')))
 
         self.crawler_process_kwargs = dict(crawler_process_kwargs)
         if self.jobs_prefix:
@@ -89,12 +91,24 @@ class Service:
 
         self.previous_progress = {}  # type: Dict[CrawlProcess, Dict[str, Any]]
 
-    def _kafka_consumer(self, topic, consumer_timeout_ms=10, **kwargs):
-        return KafkaConsumer(
-            topic,
-            group_id=self.group_id,
-            consumer_timeout_ms=consumer_timeout_ms,
-            **kwargs)
+    def _kafka_topic(self, topic: str) -> pykafka.Topic:
+        return self.kafka_client.topics[topic.encode('ascii')]
+
+    def _kafka_consumer(self, topic, consumer_timeout_ms=10,
+                        ) -> pykafka.SimpleConsumer:
+        return (
+            self._kafka_topic(topic)
+            .get_simple_consumer(
+                consumer_group=(
+                    self.group_id.format(self.queue_kind).encode('ascii')
+                    if self.group_id else None),
+                consumer_timeout_ms=consumer_timeout_ms,
+                fetch_message_max_bytes=self.max_message_size,
+            ))
+
+    def _kafka_producer(self, topic: str) -> pykafka.Producer:
+        return self._kafka_topic(topic).get_sync_producer(
+            max_request_size=self.max_message_size)
 
     def run(self) -> None:
         counter = 0
@@ -125,11 +139,12 @@ class Service:
                     if not updates_futures:
                         updates_futures.append(
                             executor.submit(self.send_updates))
-                self.producer.flush()
 
-    def _read_consumer(self, consumer):
+    def _read_consumer(self, consumer: pykafka.SimpleConsumer):
         if consumer is None:
             return
+        logging.info('Reading consumer for topic {}'
+                     .format(consumer.topic.name))
         for message in consumer:
             self._debug_save_message(message.value, 'incoming')
             try:
@@ -138,6 +153,10 @@ class Service:
                 logging.error('Error decoding message: {}'
                               .format(repr(message.value)),
                               exc_info=e)
+        if self.group_id:
+            consumer.commit_offsets()
+        logging.info('Done reading consumer for topic {}'
+                     .format(consumer.topic.name))
 
     @log_ignore_exception
     def start_crawl(self, request: Dict) -> None:
@@ -217,7 +236,7 @@ class Service:
                 logging.info('Sending update for "{}" to {}: {}'
                              .format(id_, progress_topic, progress_message))
                 self.previous_progress[process] = progress_message
-                self.send(progress_topic, progress_message)
+                self.send(self.progress_producer, progress_message)
         page_samples = updates.get('pages')
         if page_samples:
             for p in page_samples:
@@ -225,12 +244,11 @@ class Service:
             pages_topic = self.output_topic('pages')
             logging.info('Sending {} sample urls for "{}" to {}'
                          .format(len(page_samples), id_, pages_topic))
-            self.send(pages_topic,
+            self.send(self.pages_producer,
                       {process.id_field: id_, 'page_samples': page_samples})
         for url in updates.get('login_urls', []):
-            logging.info('Sending login url for "{}" to {}: {}'
-                         .format(id_, self.login_output_topic, url))
-            self.send(self.login_output_topic, {
+            logging.info('Sending login url for "{}": {}'.format(id_, url))
+            self.send(self.login_output_producer, {
                 'workspace_id': process.workspace_id,
                 'job_id': id_,
                 'url': url,
@@ -239,21 +257,20 @@ class Service:
                 'screenshot': None,
             })
         for cred_id, login_result in updates.get('login_results', []):
-            logging.info(
-                'Sending login result "{}" for {} to {}'
-                .format(login_result, cred_id, self.login_result_topic))
-            self.send(self.login_result_topic,
+            logging.info('Sending login result "{}" for {}'
+                         .format(login_result, cred_id))
+            self.send(self.login_result_producer,
                       {'id': cred_id, 'result': login_result})
 
     def send_model_update(self, ws_id: str, new_model_data: bytes):
         encoded_model = encode_model_data(new_model_data)
-        topic = self.output_topic('model')
-        logging.info('Sending new model to {}, model size {:,} bytes'
-                     .format(topic, len(encoded_model)))
-        self.send(topic, {'workspace_id': ws_id, 'link_model': encoded_model})
+        logging.info('Sending new model, model size {:,} bytes'
+                     .format(len(encoded_model)))
+        self.send(self.model_producer,
+                  {'workspace_id': ws_id, 'link_model': encoded_model})
 
     def send_stopped_message(self, process: CrawlProcess):
-        self.send('events-input', {
+        self.send(self.events_producer, {
             'action': 'finished',
             'timestamp': time.time(),
             'workspaceId': process.workspace_id,
@@ -278,10 +295,11 @@ class Service:
                              password=params['password'],
                              cred_id=value['id'])
 
-    def send(self, topic: str, result: Dict):
+    def send(self, producer: pykafka.Producer, result: Dict):
         message = json.dumps(result).encode('utf8')
-        self._debug_save_message(message, 'outgoing to {}'.format(topic))
-        self.producer.send(topic, message).get()
+        self._debug_save_message(
+            message, 'outgoing to {}'.format(producer._topic.name))
+        producer.produce(message)
 
     def _debug_save_message(self, message: bytes, kind: str) -> None:
         if self.debug:
