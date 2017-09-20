@@ -45,6 +45,7 @@ class Service:
         self.needs_percentage_done = queue_kind != 'deepcrawler'
         self.single_crawl = queue_kind != 'deepcrawler'
         self.supports_login = self.queue_kind in {'crawler', 'deepcrawler'}
+        self.outputs_model = queue_kind == 'trainer'
 
         kafka_kwargs = {}
         if kafka_host is not None:
@@ -64,9 +65,10 @@ class Service:
             self._kafka_producer(self.output_topic('progress')))
         self.pages_producer = (
             self._kafka_producer(self.output_topic('pages')))
-        self.model_producer = (
-            self._kafka_producer(self.output_topic('model')))
-        self.events_producer = self._kafka_producer('events-input')
+        if self.outputs_model:
+            self.model_producer = (
+                self._kafka_producer(self.output_topic('model')))
+        self.events_producer = self._kafka_producer(topic('events-input'))
         if self.supports_login:
             self.login_consumer = self._kafka_consumer(topic('dd-login-output'))
             self.login_output_producer = (
@@ -214,9 +216,8 @@ class Service:
             if send_stopped:
                 self.send_stopped_message(process)
 
-    def output_topic(self, kind: str) -> str:
-        return '{}dd-{}-output-{}'.format(
-            self.queue_prefix, self.queue_kind, kind)
+    def output_topic(self, name: str) -> str:
+        return output_topic(self.queue_prefix, self.queue_kind, name)
 
     def send_progress_update(
             self, process: CrawlProcess, updates: Dict[str, Any]):
@@ -304,6 +305,11 @@ class Service:
             logging.info('Saving {} message to {}'.format(kind, filename))
             with gzip.open(filename, 'wb') as f:
                 f.write(message)
+
+
+def output_topic(queue_prefix, queue_kind, name):
+    return '{}dd-{}-output-{}'.format(
+        queue_prefix, queue_kind, name)
 
 
 def encode_model_data(data: Optional[bytes]) -> Optional[str]:

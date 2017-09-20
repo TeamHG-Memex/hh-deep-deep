@@ -7,10 +7,13 @@ import pickle
 from typing import Dict, Callable, List
 
 from hh_page_clf.models import DefaultModel
-from kafka import KafkaConsumer, KafkaProducer
+import kafka.client
+import pykafka
 import pytest
 
-from hh_deep_deep.service import Service, encode_model_data, decode_model_data
+from hh_deep_deep.service import (
+    Service, encode_model_data, decode_model_data, output_topic,
+)
 from hh_deep_deep.crawl_utils import get_domain
 from hh_deep_deep.utils import configure_logging
 
@@ -26,6 +29,45 @@ class ATestService(Service):
     queue_prefix = 'test-'
     jobs_prefix = 'tests'
     group_id = None  # this massively simplifies testing
+
+
+@pytest.fixture
+def kafka_client():
+    create_topics()
+    return pykafka.KafkaClient()
+
+
+def _to_bytes(x):
+    return x.encode('ascii') if isinstance(x, str) else x
+
+
+def create_topics():
+    ot = lambda kind, n: output_topic(ATestService.queue_prefix, kind, n)
+    t = lambda n: '{}{}'.format(ATestService.queue_prefix, n)
+    topic_names = [
+        t('dd-trainer-input'),
+        t('dd-crawler-input'),
+        t('dd-deepcrawler-input'),
+        ot('trainer', 'progress'),
+        ot('crawler', 'progress'),
+        ot('deepcrawler', 'progress'),
+        ot('trainer', 'pages'),
+        ot('crawler', 'pages'),
+        ot('deepcrawler', 'progress'),
+        ot('crawler', 'pages'),
+        ot('trainer', 'model'),
+        t('events-input'),
+        t('dd-login-output'),
+        t('dd-login-input'),
+        t('dd-login-result'),
+    ]
+    print('Creating topics...')
+    client = kafka.client.KafkaClient()
+    topics = client.cluster.topics()
+    for name in topic_names:
+        if name not in topics:
+            client.add_topic(name)
+    print('done creating topics')
 
 
 @pytest.mark.slow
@@ -223,12 +265,7 @@ def stop_crawl_message(id_: str) -> Dict:
     return {'id': id_, 'stop': True, 'verbose': True}
 
 
-def test_deepcrawl():
-    producer = KafkaProducer(value_serializer=encode_message)
-
-    def send(topic: str, message: Dict):
-        producer.send(topic, message).get()
-        producer.flush()
+def test_deepcrawl(kafka_client: pykafka.KafkaClient):
 
     # FIXME - max_workers set to 1 because with >1 workers the first might
     # exit due to running out of domains, and handle_login will fail
@@ -241,14 +278,16 @@ def test_deepcrawl():
         test_server_container=TEST_SERVER_CONTAINER,
         debug=DEBUG)
 
-    C = lambda t: KafkaConsumer(t, value_deserializer=decode_message)
+    C = lambda t: kafka_client.topics[_to_bytes(t)].get_simple_consumer()
+    P = lambda t: kafka_client.topics[_to_bytes(t)].get_sync_producer()
+
     progress_consumer = C(crawler_service.output_topic('progress'))
     pages_consumer = C(crawler_service.output_topic('pages'))
-    login_consumer = C(crawler_service.login_output_topic)
-    login_result_consumer = C(crawler_service.login_result_topic)
-    for c in [progress_consumer, pages_consumer, login_consumer,
-              login_result_consumer]:
-        c.poll(timeout_ms=10)
+    login_consumer = C(crawler_service.login_output_producer._topic.name)
+    login_result_consumer = C(crawler_service.login_result_producer._topic.name)
+
+    input_producer = P(crawler_service.input_topic)
+    login_input_producer = P(crawler_service.login_consumer.topic.name)
 
     crawler_service_thread = threading.Thread(target=crawler_service.run)
     crawler_service_thread.start()
@@ -276,32 +315,32 @@ def test_deepcrawl():
         ],
         'page_limit': 1000,
     }
-    send(crawler_service.input_topic, start_message)
+    input_producer.produce(encode_message(start_message))
     expected_live_domains = {'test-server-1', 'test-server-2', 'test-server-3'}
     expected_domains = expected_live_domains | {'no-such-domain'}
     try:
         debug('Waiting for pages message...')
-        pages = next(pages_consumer)
-        for p in pages.value.get('page_samples'):
+        pages = consume(pages_consumer)
+        for p in pages.get('page_samples'):
             domain = p['domain']
             assert domain in expected_live_domains
             assert get_domain(p['url']) == domain
         debug('Got it, sending login message...')
         # this message is not delivered in time at the moment
         # TODO maybe increase download delay?
-        send(crawler_service.login_input_topic, {
+        login_input_producer.produce(encode_message({
             'job_id': start_message['id'],
             'workspace_id': start_message['workspace_id'],
             'id': 'cred-id-sent-later',
             'domain': 'test-server-3',
             'url': 'http://test-server-3:8781/login',
             'key_values': {'login': 'admin', 'password': 'secret'},
-        })
+        }))
         while True:
             debug('Waiting for progress message...')
-            progress_message = next(progress_consumer)
-            debug('Got it:', progress_message.value.get('progress'))
-            progress = progress_message.value['progress']
+            progress_message = consume(progress_consumer)
+            debug('Got it:', progress_message.get('progress'))
+            progress = progress_message['progress']
             if progress and progress['domains']:
                 assert progress['status'] in {'running', 'finished'}
                 domain_statuses = dict()
@@ -322,21 +361,21 @@ def test_deepcrawl():
                     assert progress['status'] == 'finished'
                     break
         debug('Waiting for login message...')
-        login_message = next(login_consumer).value
+        login_message = consume(login_consumer)
         debug('Got login message for {}'.format(login_message['url']))
         assert login_message['job_id'] == start_message['id']
         assert login_message['workspace_id'] == start_message['workspace_id']
         assert login_message['keys'] == ['login', 'password']
         debug('Waiting for login result message...')
         login_results = {r['id']: r for r in (
-            next(login_result_consumer).value for _ in range(2))}
+            consume(login_result_consumer) for _ in range(2))}
         assert login_results['cred-id-initial-correct']['result'] == 'success'
         # FIXME - this is most likely an autologin / test server issue
         # assert login_results['cred-id-initial-wrong']['result'] == 'failed'
     finally:
-        send(crawler_service.input_topic,
-             stop_crawl_message(start_message['id']))
-        send(crawler_service.input_topic, {'from-tests': 'stop'})
+        input_producer.produce(encode_message(
+             stop_crawl_message(start_message['id'])))
+        input_producer.produce(encode_message({'from-tests': 'stop'}))
         crawler_service_thread.join()
 
 
@@ -350,6 +389,10 @@ def test_encode_model():
 
 # TODO - test that encode_model_data and encode_object
 # from hh_page_classifier are in sync
+
+
+def consume(consumer: pykafka.SimpleConsumer) -> Dict:
+    return decode_message(consumer.consume().value)
 
 
 def decode_message(message: bytes) -> Dict:
