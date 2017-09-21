@@ -1,4 +1,5 @@
 import json
+from functools import partial
 import logging
 import threading
 import time
@@ -72,30 +73,23 @@ def create_topics():
 
 
 @pytest.mark.slow
-def test_trainer_service():
-    _test_service(run_trainer=True, run_crawler=False)
+def test_trainer_service(kafka_client):
+    _test_service(kafka_client, run_trainer=True, run_crawler=False)
 
 
 @pytest.mark.slow
-def test_crawler_service():
-    _test_service(run_trainer=False, run_crawler=True)
+def test_crawler_service(kafka_client):
+    _test_service(kafka_client, run_trainer=False, run_crawler=True)
 
 
 @pytest.mark.slow
-def test_service():
-    _test_service(run_trainer=True, run_crawler=True)
+def test_service(kafka_client):
+    _test_service(kafka_client, run_trainer=True, run_crawler=True)
 
 
-def _test_service(run_trainer, run_crawler):
+def _test_service(kafka_client, run_trainer, run_crawler):
     # This is a big integration test, better run with "-s"
-
     ws_id = 'test-ws-id'
-    producer = KafkaProducer(value_serializer=encode_message)
-
-    def send(topic: str, message: Dict):
-        producer.send(topic, message).get()
-        producer.flush()
-
     start_crawler_message = None
     start_message_path = Path('.tst.start-crawler.pkl')
     if not run_trainer:
@@ -107,51 +101,63 @@ def _test_service(run_trainer, run_crawler):
             debug('No cached start dd_crawl message found, must run trainer')
             run_trainer = True
     if run_trainer:
-        start_crawler_message = _test_trainer_service(ws_id, send)
+        start_crawler_message = _test_trainer_service(ws_id, kafka_client)
         with start_message_path.open('wb') as f:
             pickle.dump(start_crawler_message, f)
     assert start_crawler_message is not None
 
     if run_crawler:
-        _test_crawler_service(start_crawler_message, send)
+        _test_crawler_service(start_crawler_message, kafka_client)
 
 
-def _test_trainer_service(ws_id: str,
-                          send: Callable[[str, Dict], None]) -> Dict:
+def make_consumer(kafka_client: pykafka.KafkaClient, topic: str,
+                  ) -> pykafka.SimpleConsumer:
+    return kafka_client.topics[_to_bytes(topic)].get_simple_consumer(
+        auto_offset_reset=OffsetType.LATEST,
+        reset_offset_on_start=True)
+
+
+def make_producer(kafka_client: pykafka.KafkaClient, topic: str,
+                  ) -> pykafka.Producer:
+    return kafka_client.topics[_to_bytes(topic)].get_sync_producer()
+
+
+def _test_trainer_service(
+        ws_id: str, kafka_client: pykafka.KafkaClient) -> Dict:
     """ Test trainer service, return start message for crawler service.
     """
+    C = lambda t: make_consumer(kafka_client, t)
+    P = lambda t: make_producer(kafka_client, t)
     trainer_service = ATestService(
         'trainer', checkpoint_interval=50, check_updates_every=2, debug=DEBUG)
-    progress_consumer, pages_consumer, model_consumer = consumers = [
-        KafkaConsumer(trainer_service.output_topic(kind),
-                      value_deserializer=decode_message)
-        for kind in ['progress', 'pages', 'model']]
-    for c in consumers:
-        c.poll(timeout_ms=10)
+    progress_consumer = C(trainer_service.output_topic('progress'))
+    pages_consumer = C(trainer_service.output_topic('pages'))
+    model_consumer = C(trainer_service.output_topic('model'))
+
+    input_producer = P(trainer_service.input_topic)
 
     trainer_service_thread = threading.Thread(target=trainer_service.run)
     trainer_service_thread.start()
 
     debug('Sending start trainer message')
-    send(trainer_service.input_topic, start_trainer_message(ws_id))
-    time.sleep(2)
     start_message = start_trainer_message(ws_id)
+    input_producer.produce(encode_message(start_message))
     debug('Sending another start trainer message (old should stop)')
-    send(trainer_service.input_topic, start_message)
+    input_producer.produce(encode_message(start_message))
     try:
         _check_progress_pages(progress_consumer, pages_consumer,
                               check_trainer=True)
         debug('Waiting for model, this might take a while...')
         # this is not part of the API, but it's convenient for tests
-        model_message = next(model_consumer).value
+        model_message = consume(model_consumer)
         debug('Got it.')
         assert model_message['workspace_id'] == ws_id
         link_model = model_message['link_model']
 
     finally:
         # this is not part of the API, but it's convenient for tests
-        send(trainer_service.input_topic, stop_crawl_message(ws_id))
-        send(trainer_service.input_topic, {'from-tests': 'stop'})
+        input_producer.produce(encode_message(stop_crawl_message(ws_id)))
+        input_producer.produce(encode_message({'from-tests': 'stop'}))
         trainer_service_thread.join()
 
     start_message['link_model'] = link_model
@@ -162,10 +168,10 @@ def _check_progress_pages(progress_consumer, pages_consumer,
                           check_trainer=False):
     while True:
         debug('Waiting for pages message...')
-        check_pages(next(pages_consumer))
+        check_pages(consume(pages_consumer))
         debug('Got it, now waiting for progress message...')
-        progress_message = next(progress_consumer)
-        debug('Got it:', progress_message.value.get('progress'))
+        progress_message = consume(progress_consumer)
+        debug('Got it:', progress_message.get('progress'))
         progress = check_progress(progress_message)
         if progress and (not check_trainer or
                          'Last deep-deep model checkpoint' in progress):
@@ -216,8 +222,7 @@ def debug(arg, *args: List[str]) -> None:
     print('{} '.format('>' * 60), arg, *args)
 
 
-def check_progress(message):
-    value = message.value
+def check_progress(value):
     if 'id' in value:
         assert value['id'] == 'test-id'
     else:
@@ -234,8 +239,7 @@ def check_progress(message):
         return progress
 
 
-def check_pages(message):
-    value = message.value
+def check_pages(value):
     if 'id' in value:
         assert value['id'] == 'test-id'
     else:
@@ -279,11 +283,8 @@ def test_deepcrawl(kafka_client: pykafka.KafkaClient):
         test_server_container=TEST_SERVER_CONTAINER,
         debug=DEBUG)
 
-    C = lambda t: kafka_client.topics[_to_bytes(t)].get_simple_consumer(
-        auto_offset_reset=OffsetType.LATEST,
-        reset_offset_on_start=True)
-    P = lambda t: kafka_client.topics[_to_bytes(t)].get_sync_producer()
-
+    C = lambda t: make_consumer(kafka_client, t)
+    P = lambda t: make_producer(kafka_client, t)
     progress_consumer = C(crawler_service.output_topic('progress'))
     pages_consumer = C(crawler_service.output_topic('pages'))
     login_consumer = C(crawler_service.login_output_producer._topic.name)
