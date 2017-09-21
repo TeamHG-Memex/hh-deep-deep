@@ -179,42 +179,46 @@ def _check_progress_pages(progress_consumer, pages_consumer,
 
 
 def _test_crawler_service(
-        start_message: Dict, send: Callable[[str, Dict], None]) -> None:
+        start_message: Dict, kafka_client: pykafka.KafkaClient) -> None:
     start_message['broadness'] = 'N10'
     start_message['id'] = 'test-id'
     crawler_service = ATestService(
         'crawler', check_updates_every=2, max_workers=2, debug=DEBUG)
-    C = lambda t: KafkaConsumer(t, value_deserializer=decode_message)
+    C = lambda t: make_consumer(kafka_client, t)
+    P = lambda t: make_producer(kafka_client, t)
     progress_consumer = C(crawler_service.output_topic('progress'))
     pages_consumer = C(crawler_service.output_topic('pages'))
-    login_consumer = C(crawler_service.login_output_topic)
-    for c in [progress_consumer, pages_consumer, login_consumer]:
-        c.poll(timeout_ms=10)
+    login_consumer = C(crawler_service.login_output_producer._topic.name)
+
+    input_producer = P(crawler_service.input_topic)
+    login_producer = P(crawler_service.login_consumer.topic.name)
+
     crawler_service_thread = threading.Thread(target=crawler_service.run)
     crawler_service_thread.start()
 
     debug('Sending start crawler message')
-    send(crawler_service.input_topic, start_message)
+    input_producer.produce(encode_message(start_message))
     try:
         _check_progress_pages(progress_consumer, pages_consumer)
         debug('Waiting for login message...')
-        login_message = next(login_consumer).value
+        login_message = consume(login_consumer)
         debug('Got login message for {}'.format(login_message['url']))
         assert login_message['job_id'] == start_message['id']
         assert login_message['workspace_id'] == start_message['workspace_id']
         assert login_message['keys'] == ['login', 'password']
-        send(crawler_service.login_input_topic, {
+        login_producer.produce(encode_message({
             'job_id': start_message['id'],
             'url': 'http://news.ycombinator.com',
             'key_values': {
                 'login': 'invalid',
                 'password': 'invalid',
             }
-        })
+        }))
         # TODO - wait for login status message
     finally:
-        send(crawler_service.input_topic, stop_crawl_message(start_message['id']))
-        send(crawler_service.input_topic, {'from-tests': 'stop'})
+        input_producer.produce(
+            encode_message(stop_crawl_message(start_message['id'])))
+        input_producer.produce(encode_message({'from-tests': 'stop'}))
         crawler_service_thread.join()
 
 
