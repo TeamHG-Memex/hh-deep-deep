@@ -161,7 +161,11 @@ def _check_progress_pages(progress_consumer, pages_consumer,
 
 
 def _test_crawler_service(
-        start_message: Dict, kafka_client: pykafka.KafkaClient) -> None:
+        start_message: Dict, kafka_client: pykafka.KafkaClient,
+        check_login=False,
+        ) -> None:
+    # login check if not 100% reliable as it's run against a live website,
+    # it's tested properly in test_deepcrawl
     start_message['broadness'] = 'N10'
     start_message['id'] = 'test-id'
     crawler_service = ATestService(
@@ -183,24 +187,26 @@ def _test_crawler_service(
     input_producer.produce(encode_message(start_message))
     try:
         _check_progress_pages(progress_consumer, pages_consumer)
-        debug('Waiting for login message...')
-        login_message = consume(login_consumer)
-        debug('Got login message for {}'.format(login_message['url']))
-        assert login_message['job_id'] == start_message['id']
-        assert login_message['workspace_id'] == start_message['workspace_id']
-        assert login_message['keys'] == ['login', 'password']
-        login_producer.produce(encode_message({
-            'id': 'cred-id-wrong',
-            'job_id': start_message['id'],
-            'url': 'http://news.ycombinator.com',
-            'key_values': {
-                'login': 'invalid',
-                'password': 'invalid',
-            }
-        }))
-        debug('Waiting for login result message')
-        login_result = consume(login_result_consumer)
-        assert login_result == {'id': 'cred-id-wrong', 'result': 'failed'}
+        if check_login:
+            debug('Waiting for login message...')
+            login_message = consume(login_consumer)
+            debug('Got login message for {}'.format(login_message['url']))
+            assert login_message['job_id'] == start_message['id']
+            assert (
+                login_message['workspace_id'] == start_message['workspace_id'])
+            assert login_message['keys'] == ['login', 'password']
+            login_producer.produce(encode_message({
+                'id': 'cred-id-wrong',
+                'job_id': start_message['id'],
+                'url': 'http://news.ycombinator.com',
+                'key_values': {
+                    'login': 'invalid',
+                    'password': 'invalid',
+                }
+            }))
+            debug('Waiting for login result message')
+            login_result = consume(login_result_consumer)
+            assert login_result == {'id': 'cred-id-wrong', 'result': 'failed'}
     finally:
         input_producer.produce(
             encode_message(stop_crawl_message(start_message['id'])))
