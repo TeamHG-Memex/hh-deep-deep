@@ -1,11 +1,9 @@
 import json
-from functools import partial
 import logging
 import threading
-import time
 from pathlib import Path
 import pickle
-from typing import Dict, Callable, List
+from typing import Dict, List
 
 from hh_page_clf.models import DefaultModel
 import kafka.client
@@ -37,10 +35,6 @@ class ATestService(Service):
 def kafka_client():
     create_topics()
     return pykafka.KafkaClient()
-
-
-def _to_bytes(x):
-    return x.encode('ascii') if isinstance(x, str) else x
 
 
 def create_topics():
@@ -110,18 +104,6 @@ def _test_service(kafka_client, run_trainer, run_crawler):
         _test_crawler_service(start_crawler_message, kafka_client)
 
 
-def make_consumer(kafka_client: pykafka.KafkaClient, topic: str,
-                  ) -> pykafka.SimpleConsumer:
-    return kafka_client.topics[_to_bytes(topic)].get_simple_consumer(
-        auto_offset_reset=OffsetType.LATEST,
-        reset_offset_on_start=True)
-
-
-def make_producer(kafka_client: pykafka.KafkaClient, topic: str,
-                  ) -> pykafka.Producer:
-    return kafka_client.topics[_to_bytes(topic)].get_sync_producer()
-
-
 def _test_trainer_service(
         ws_id: str, kafka_client: pykafka.KafkaClient) -> Dict:
     """ Test trainer service, return start message for crawler service.
@@ -189,6 +171,7 @@ def _test_crawler_service(
     progress_consumer = C(crawler_service.output_topic('progress'))
     pages_consumer = C(crawler_service.output_topic('pages'))
     login_consumer = C(crawler_service.login_output_producer._topic.name)
+    login_result_consumer = C(crawler_service.login_result_producer._topic.name)
 
     input_producer = P(crawler_service.input_topic)
     login_producer = P(crawler_service.login_consumer.topic.name)
@@ -207,6 +190,7 @@ def _test_crawler_service(
         assert login_message['workspace_id'] == start_message['workspace_id']
         assert login_message['keys'] == ['login', 'password']
         login_producer.produce(encode_message({
+            'id': 'cred-id-wrong',
             'job_id': start_message['id'],
             'url': 'http://news.ycombinator.com',
             'key_values': {
@@ -214,7 +198,9 @@ def _test_crawler_service(
                 'password': 'invalid',
             }
         }))
-        # TODO - wait for login status message
+        debug('Waiting for login result message')
+        login_result = consume(login_result_consumer)
+        assert login_result == {'id': 'cred-id-wrong', 'result': 'failed'}
     finally:
         input_producer.produce(
             encode_message(stop_crawl_message(start_message['id'])))
@@ -275,7 +261,6 @@ def stop_crawl_message(id_: str) -> Dict:
 
 
 def test_deepcrawl(kafka_client: pykafka.KafkaClient):
-
     # FIXME - max_workers set to 1 because with >1 workers the first might
     # exit due to running out of domains, and handle_login will fail
     crawler_service = ATestService(
@@ -397,6 +382,22 @@ def test_encode_model():
 
 # TODO - test that encode_model_data and encode_object
 # from hh_page_classifier are in sync
+
+
+def make_consumer(kafka_client: pykafka.KafkaClient, topic: str,
+                  ) -> pykafka.SimpleConsumer:
+    return kafka_client.topics[_to_bytes(topic)].get_simple_consumer(
+        auto_offset_reset=OffsetType.LATEST,
+        reset_offset_on_start=True)
+
+
+def make_producer(kafka_client: pykafka.KafkaClient, topic: str,
+                  ) -> pykafka.Producer:
+    return kafka_client.topics[_to_bytes(topic)].get_sync_producer()
+
+
+def _to_bytes(x):
+    return x.encode('ascii') if isinstance(x, str) else x
 
 
 def consume(consumer: pykafka.SimpleConsumer) -> Dict:
