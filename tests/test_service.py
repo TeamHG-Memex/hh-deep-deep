@@ -1,7 +1,6 @@
 import json
 import logging
 import threading
-from pathlib import Path
 import pickle
 from typing import Dict, List
 
@@ -83,7 +82,7 @@ def test_trainer_service(kafka_client: pykafka.KafkaClient):
     start_message = start_trainer_message(ws_id)
     debug('Sending start trainer message')
     input_producer.produce(encode_message(start_message))
-    debug('Sending another start trainer message (old should stop)')
+    debug('Sending another start trainer message (old should continue)')
     input_producer.produce(encode_message(start_message))
     try:
         _check_progress_pages(progress_consumer, pages_consumer)

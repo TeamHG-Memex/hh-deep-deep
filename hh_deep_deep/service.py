@@ -49,6 +49,8 @@ class Service:
         self.supports_login = queue_kind in {'crawler', 'deepcrawler'}
         self.outputs_model = queue_kind == 'trainer'
         self.needs_model = queue_kind == 'crawler'
+        self.delay_stop = 300 if queue_kind == 'trainer' else 0
+        self.delayed_requests = {}  # workspace_id -> request
 
         kafka_kwargs = {}
         if kafka_host is not None:
@@ -141,6 +143,8 @@ class Service:
                             'Dropping a message in unknown format: {}'
                             .format(value.keys() if hasattr(value, 'keys')
                                     else type(value)))
+                for value in self.delayed_requests.values():
+                    executor.submit(self.start_crawl, value, delayed=True)
                 if self.supports_login:
                     for value in self._read_consumer(self.login_consumer):
                         executor.submit(self.handle_login, value)
@@ -165,28 +169,25 @@ class Service:
         consumer.commit_offsets()
 
     @log_ignore_exception
-    def start_crawl(self, request: Dict) -> None:
+    def start_crawl(self, request: Dict, delayed=False) -> None:
         workspace_id = request['workspace_id']
         id_ = request['id'] if 'id' in request else workspace_id
-        logging.info('Got start crawl message with id "{id}", {n_urls} urls'
-                     .format(id=id_, n_urls=len(request['urls'])))
+        if not delayed:
+            logging.info('Got start crawl message with id "{id}", {n_urls} urls'
+                         .format(id=id_, n_urls=len(request['urls'])))
         if self.needs_model and 'link_model' not in request:
             self._start_trainer_from_crawler(request)
             return
         if self.single_crawl:
-            # Stop all running processes for this workspace
-            # (should be at most 1 usually)
-            for p_id, process in list(self.running.items()):
-                if process.workspace_id == workspace_id:
-                    if is_trainer_started_by_crawler(process):
-                        logging.info(
-                            'Keeping trainer started by crawler running')
-                    else:
-                        logging.info('Stopping old process {} for workspace {}'
-                                     .format(p_id, workspace_id))
-                        process.stop()
-                        self.running.pop(p_id, None)
-                        self.send_stopped_message(process)
+            delay_start = self._stop_running(request)
+            if delay_start:
+                self.delayed_requests[workspace_id] = request
+                return
+        if delayed:
+            logging.info('Delayed start with id "{id}", {n_urls} urls'
+                         .format(id=id_, n_urls=len(request['urls'])))
+        if workspace_id in self.delayed_requests:
+            del self.delayed_requests[workspace_id]
         kwargs = dict(self.crawler_process_kwargs)
         kwargs['seeds'] = request['urls']
         if 'page_model' in request:
@@ -201,6 +202,35 @@ class Service:
                                      **kwargs)
         process.start()
         self.running[id_] = process
+
+    def _stop_running(self, workspace_id):
+        """ Stop all running processes for this workspace
+        (should be at most 1 usually). If False is returned, no new process
+        should be started.
+        """
+        delay_start = False
+        for p_id, process in list(self.running.items()):
+            if process.workspace_id == workspace_id:
+                if is_trainer_started_by_crawler(process):
+                    logging.info(
+                        'Keeping trainer started by crawler running')
+                else:
+                    should_stop = True
+                    if self.delay_stop:
+                        dt = time.time() - process.start_time
+                        if dt < self.delay_stop:
+                            should_stop = False
+                            delay_start = True
+                            logging.info(
+                                'Process running only {:.0f} s, leaving'
+                                .format(dt))
+                    if should_stop:
+                        logging.info('Stopping old process {}, workspace {}'
+                                     .format(p_id, workspace_id))
+                        process.stop()
+                        self.running.pop(p_id, None)
+                        self.send_stopped_message(process)
+        return delay_start
 
     def _start_trainer_from_crawler(self, request: Dict):
         # Request from Sitehound: need to train a fresh deep-deep model.

@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 import re
 import subprocess
+import time
 from typing import Any, Dict, Optional
 
 from .crawl_utils import (
@@ -32,6 +33,7 @@ class DeepDeepProcess(CrawlProcess):
                  page_clf_data: bytes,
                  pid: str=None,
                  root: Path=None,
+                 start_time: float=None,
                  checkpoint_interval: int=1000,
                  crawler_params: Dict=None,
                  **kwargs):
@@ -44,6 +46,7 @@ class DeepDeepProcess(CrawlProcess):
         self.log_follower = JsonLinesFollower(self.paths.items)
         self.page_clf_data = page_clf_data
         self.checkpoint_interval = checkpoint_interval
+        self.start_time = start_time
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DeepDeepProcess']:
@@ -67,6 +70,7 @@ class DeepDeepProcess(CrawlProcess):
             id_=meta['id'],
             workspace_id=meta['workspace_id'],
             crawler_params=meta['crawler_params'],
+            start_time=meta['start_time'],
             seeds=seeds,
             page_clf_data=paths.page_clf.read_bytes(),
             root=root,
@@ -127,11 +131,13 @@ class DeepDeepProcess(CrawlProcess):
             ])
         logging.info('Starting crawl in {}'.format(self.paths.root))
         self.pid = subprocess.check_output(args).decode('utf8').strip()
+        self.start_time = time.time()
         self.paths.meta.write_text(json.dumps({
             'id': self.id_,
             'pid': self.pid,
             'workspace_id': self.workspace_id,
             'crawler_params': self.crawler_params,
+            'start_time': self.start_time,
         }), encoding='utf8')
         logging.info('Crawl started, container id {}'.format(self.pid))
 
