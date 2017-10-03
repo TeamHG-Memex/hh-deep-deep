@@ -38,8 +38,6 @@ class DeepDeepProcess(CrawlProcess):
         self.log_follower = JsonLinesFollower(self.paths.items)
         self.page_clf_data = page_clf_data
         self.checkpoint_interval = checkpoint_interval
-        # last model sent in self.get_new_model
-        self.last_model_file = None  # type: Path
 
     @classmethod
     def load_running(cls, root: Path, **kwargs) -> Optional['DeepDeepProcess']:
@@ -159,12 +157,7 @@ class DeepDeepProcess(CrawlProcess):
             item_progress = get_progress_from_item(last_item)
             pages = [get_sample_from_item(item) for item in last_items
                      if 'url' in item]
-            if self.last_model_file:
-                model_progress = ('Last deep-deep model checkpoint {}.'
-                                  .format(self.last_model_file.name))
-            else:
-                model_progress = 'Warning: no model checkpoints yet.'
-            return {'progress': '{} {}'.format(model_progress, item_progress),
+            return {'progress': item_progress,
                     'pages': pages,
                     'percentage_done': (
                         100 * last_item.get('response_received_count', 0) /
@@ -172,12 +165,7 @@ class DeepDeepProcess(CrawlProcess):
                     }
         return {}
 
-    def get_new_model(self) -> Optional[bytes]:
-        """ Return a data of the new model (if there is any), or None.
-        """
-        return self.get_model(only_new=True)
-
-    def get_model(self, only_new=False) -> Optional[bytes]:
+    def get_model(self) -> Optional[bytes]:
         """ Return a data of the last model (if there is any), or None.
         """
         model_files = sorted(
@@ -186,10 +174,8 @@ class DeepDeepProcess(CrawlProcess):
         )
         if model_files:
             model_file = model_files[-1]
-            if not only_new or model_file != self.last_model_file:
-                logging.info('Sending model from {}'.format(model_file))
-                self.last_model_file = model_file
-                return model_file.read_bytes()
+            logging.info('Reading model from {}'.format(model_file))
+            return model_file.read_bytes()
 
 
 def get_sample_from_item(item: Dict) -> Dict:

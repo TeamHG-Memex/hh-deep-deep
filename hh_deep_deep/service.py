@@ -68,7 +68,6 @@ class Service:
         self.progress_producer = P(self.output_topic('progress'))
         self.pages_producer = P(self.output_topic('pages'))
         if self.outputs_model:
-            self.model_producer = P(self.output_topic('model'))
             self.crawler_producer = P(topic('dd-crawler-input'))
         if self.needs_model:
             self.trainer_producer = P(topic('dd-trainer-input'))
@@ -185,11 +184,15 @@ class Service:
             # (should be at most 1 usually)
             for p_id, process in list(self.running.items()):
                 if process.workspace_id == workspace_id:
-                    logging.info('Stopping old process {} for workspace {}'
-                                 .format(p_id, workspace_id))
-                    process.stop()
-                    self.running.pop(p_id, None)
-                    self.send_stopped_message(process)
+                    if is_trainer_started_by_crawler(process):
+                        logging.info(
+                            'Keeping trainer started by crawler running')
+                    else:
+                        logging.info('Stopping old process {} for workspace {}'
+                                     .format(p_id, workspace_id))
+                        process.stop()
+                        self.running.pop(p_id, None)
+                        self.send_stopped_message(process)
         kwargs = dict(self.crawler_process_kwargs)
         kwargs['seeds'] = request['urls']
         if 'page_model' in request:
@@ -225,21 +228,13 @@ class Service:
                     'Crawl should be running but it\'s not, stopping.')
                 process.stop(verbose=True)
                 self.running.pop(id_)
-            updates = process.get_updates()
-            self.send_progress_update(process, updates)
-            if self.outputs_model:
-                new_model_data = process.get_new_model()
-                if new_model_data:
-                    self.send_model_update(process.workspace_id, new_model_data)
-                if not is_running and process.crawler_params is not None:
-                    # trainer was called by crawler: need to send back the
-                    # start message.
-                    model_data = new_model_data or process.get_model()
-                    if model_data:
-                        self.send_start_crawler(process, model_data)
-                    else:
-                        logging.warning(
-                            'No model for crawler produced by trainer')
+            if not is_trainer_started_by_crawler(process):
+                updates = process.get_updates()
+                self.send_progress_update(process, updates)
+            if not is_running and is_trainer_started_by_crawler(process):
+                # trainer was called by crawler and it's done training:
+                # need to send back the start message.
+                self.send_start_crawler(process)
             if not is_running:
                 self.send_stopped_message(process)
 
@@ -286,14 +281,11 @@ class Service:
             self.send(self.login_result_producer,
                       {'id': cred_id, 'result': login_result})
 
-    def send_model_update(self, ws_id: str, new_model_data: bytes):
-        encoded_model = encode_model_data(new_model_data)
-        logging.info('Sending new model, model size {:,} bytes'
-                     .format(len(encoded_model)))
-        self.send(self.model_producer,
-                  {'workspace_id': ws_id, 'link_model': encoded_model})
-
-    def send_start_crawler(self, process: DeepDeepProcess, model_data: bytes):
+    def send_start_crawler(self, process: DeepDeepProcess):
+        model_data = process.get_model()
+        if not model_data:
+            logging.warning('No model for crawler produced by trainer')
+            return
         message = dict(process.crawler_params)
         message.update({
             'workspace_id': process.workspace_id,
@@ -347,6 +339,11 @@ class Service:
             logging.info('Saving {} message to {}'.format(kind, filename))
             with gzip.open(filename, 'wb') as f:
                 f.write(message)
+
+
+def is_trainer_started_by_crawler(process):
+    return (isinstance(process, DeepDeepProcess) and
+            process.crawler_params is not None)
 
 
 def output_topic(queue_prefix, queue_kind, name):

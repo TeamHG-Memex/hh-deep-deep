@@ -51,7 +51,6 @@ def create_topics():
         ot('crawler', 'pages'),
         ot('deepcrawler', 'progress'),
         ot('crawler', 'pages'),
-        ot('trainer', 'model'),
         t('events-input'),
         t('dd-login-output'),
         t('dd-login-input'),
@@ -74,7 +73,6 @@ def test_trainer_service(kafka_client: pykafka.KafkaClient):
         'trainer', checkpoint_interval=50, check_updates_every=2, debug=DEBUG)
     progress_consumer = C(trainer_service.output_topic('progress'))
     pages_consumer = C(trainer_service.output_topic('pages'))
-    model_consumer = C(trainer_service.output_topic('model'))
 
     input_producer = P(trainer_service.input_topic)
 
@@ -88,15 +86,7 @@ def test_trainer_service(kafka_client: pykafka.KafkaClient):
     debug('Sending another start trainer message (old should stop)')
     input_producer.produce(encode_message(start_message))
     try:
-        _check_progress_pages(progress_consumer, pages_consumer,
-                              check_trainer=True)
-        debug('Waiting for model, this might take a while...')
-        # this is not part of the API, but it's convenient for tests
-        model_message = consume(model_consumer)
-        debug('Got it.')
-        assert model_message['workspace_id'] == ws_id
-        link_model = model_message['link_model']
-
+        _check_progress_pages(progress_consumer, pages_consumer)
     finally:
         # this is not part of the API, but it's convenient for tests
         input_producer.produce(encode_message(stop_crawl_message(ws_id)))
@@ -104,8 +94,7 @@ def test_trainer_service(kafka_client: pykafka.KafkaClient):
         trainer_service_thread.join()
 
 
-def _check_progress_pages(progress_consumer, pages_consumer,
-                          check_trainer=False):
+def _check_progress_pages(progress_consumer, pages_consumer):
     while True:
         debug('Waiting for pages message...')
         check_pages(consume(pages_consumer))
@@ -113,8 +102,7 @@ def _check_progress_pages(progress_consumer, pages_consumer,
         progress_message = consume(progress_consumer)
         debug('Got it:', progress_message.get('progress'))
         progress = check_progress(progress_message)
-        if progress and (not check_trainer or
-                         'Last deep-deep model checkpoint' in progress):
+        if progress:
             return progress
 
 
