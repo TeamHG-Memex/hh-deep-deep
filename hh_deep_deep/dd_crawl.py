@@ -40,14 +40,12 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
         """
         paths = cls.paths_cls(root)
         if not all(p.exists() for p in [
-                paths.pid, paths.id, paths.seeds, paths.page_clf,
-                paths.link_clf, paths.workspace_id]):
+                paths.meta, paths.seeds, paths.page_clf, paths.link_clf]):
             return
         if not is_running(paths.root):
             logging.warning('Cleaning up job in {}.'.format(paths.root))
             subprocess.check_call(
                 ['docker-compose', 'down', '-v'], cwd=str(paths.root))
-            paths.pid.unlink()
             return
         with paths.seeds.open('rt', encoding='utf8') as f:
             seeds = [line.strip() for line in f]
@@ -56,10 +54,10 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
                 login_credentials = json.load(f)
         else:
             login_credentials = None
+        meta = json.loads(paths.meta.read_text('utf8'))
         return cls(
-            pid=paths.pid.read_text(),
-            id_=paths.id.read_text(),
-            workspace_id=paths.workspace_id.read_text(),
+            id_=meta['id'],
+            workspace_id=meta['workspace_id'],
             seeds=seeds,
             login_credentials=login_credentials,
             page_clf_data=paths.page_clf.read_bytes(),
@@ -68,10 +66,11 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
             **kwargs)
 
     def start(self):
-        assert self.pid is None
         self.paths.mkdir()
-        self.paths.id.write_text(self.id_)
-        self.paths.workspace_id.write_text(self.workspace_id)
+        self.paths.meta.write_text(json.dumps({
+            'id': self.id_,
+            'workspace_id': self.workspace_id,
+        }), encoding='utf8')
         self.paths.page_clf.write_bytes(self.page_clf_data)
         self.paths.link_clf.write_bytes(self.link_clf_data)
         # Create out/media beforehand to prevent a race condition
@@ -104,8 +103,6 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
         logging.info('Starting crawl in {}'.format(self.paths.root))
         self._compose_call('up', '-d')
         self._compose_call('scale', 'crawler={}'.format(n_processes))
-        self.pid = self.id_
-        self.paths.pid.write_text(self.pid)
         logging.info('Crawl "{}" started'.format(self.id_))
 
     @staticmethod

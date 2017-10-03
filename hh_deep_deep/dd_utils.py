@@ -52,16 +52,13 @@ class BaseDDCrawlerProcess(CrawlProcess):
         self._login_state = {}  # type: Dict[str, str]
 
     def is_running(self):
-        return self.pid is not None and is_running(self.paths.root)
+        return is_running(self.paths.root)
 
     def stop(self, verbose=False):
-        assert self.pid is not None
         if verbose:
             self._compose_call('logs', '--tail', '30')
         self._compose_call('down', '-v')
-        self.paths.pid.unlink()
-        logging.info('Crawl "{}" stopped'.format(self.pid))
-        self.pid = None
+        logging.info('Crawl "{}" stopped'.format(self.id_))
 
     def handle_login(self, *, url, login, password, cred_id):
         self._login_cred_ids[get_domain(url)] = cred_id

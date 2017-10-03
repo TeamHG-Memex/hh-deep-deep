@@ -28,9 +28,7 @@ class CrawlPaths:
     def __init__(self, root: Path):
         root = root.absolute()
         self.root = root
-        self.id = root.joinpath('id.txt')
-        self.workspace_id = self.root.joinpath('workspace_id.txt')
-        self.pid = root.joinpath('pid.txt')
+        self.meta = root.joinpath('meta.json')
         self.seeds = root.joinpath('seeds.txt')
         self.models = Path('./models')
 
@@ -50,12 +48,10 @@ class CrawlProcess:
                  seeds: List[str],
                  docker_image: str=None,
                  host_root: str=None,
-                 pid: str=None,
                  jobs_prefix: str=None,
                  page_limit: int=None,
                  proxy_container: str=None,
                  test_server_container: str=None):
-        self.pid = pid
         self.id_ = id_
         self.workspace_id = workspace_id
         self.seeds = seeds
