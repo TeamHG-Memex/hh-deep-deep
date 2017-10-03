@@ -28,6 +28,7 @@ class CrawlPaths:
     def __init__(self, root: Path):
         root = root.absolute()
         self.root = root
+        self.pid = root.joinpath('pid.txt')
         self.meta = root.joinpath('meta.json')
         self.seeds = root.joinpath('seeds.txt')
         self.models = Path('./models')

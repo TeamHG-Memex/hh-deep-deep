@@ -58,6 +58,7 @@ class BaseDDCrawlerProcess(CrawlProcess):
         if verbose:
             self._compose_call('logs', '--tail', '30')
         self._compose_call('down', '-v')
+        self.paths.pid.unlink()
         logging.info('Crawl "{}" stopped'.format(self.id_))
 
     def handle_login(self, *, url, login, password, cred_id):

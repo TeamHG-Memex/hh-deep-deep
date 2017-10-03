@@ -53,20 +53,23 @@ class DeepDeepProcess(CrawlProcess):
         """ Initialize a process from a directory.
         """
         paths = cls.path_cls(root)
-        if not all(p.exists()
-                   for p in [paths.meta, paths.seeds, paths.page_clf]):
+        if not all(p.exists() for p in [
+                paths.pid, paths.meta, paths.seeds, paths.page_clf]):
             return
+
         meta = json.loads(paths.meta.read_text('utf8'))
-        if not cls._is_running(meta['pid']):
+        pid = paths.pid.read_text()
+        if not cls._is_running(pid):
+            paths.pid.unlink()
             try:
-                subprocess.check_output(['docker', 'rm', meta['pid']])
+                subprocess.check_output(['docker', 'rm', pid])
             except subprocess.CalledProcessError:
                 pass
             return
         with paths.seeds.open('rt', encoding='utf8') as f:
             seeds = [url for url, in csv.reader(f)]
         return cls(
-            pid=meta['pid'],
+            pid=pid,
             id_=meta['id'],
             workspace_id=meta['workspace_id'],
             crawler_params=meta['crawler_params'],
@@ -134,11 +137,11 @@ class DeepDeepProcess(CrawlProcess):
         self.start_time = time.time()
         self.paths.meta.write_text(json.dumps({
             'id': self.id_,
-            'pid': self.pid,
             'workspace_id': self.workspace_id,
             'crawler_params': self.crawler_params,
             'start_time': self.start_time,
         }), encoding='utf8')
+        self.paths.pid.write_text(self.pid)
         logging.info('Crawl started, container id {}'.format(self.pid))
 
     def stop(self, verbose=False):
@@ -158,6 +161,7 @@ class DeepDeepProcess(CrawlProcess):
             subprocess.check_call(['docker', 'rm', self.pid])
         except subprocess.CalledProcessError:
             pass  # might be removed already
+        self.paths.pid.unlink()
         logging.info('Removed container id {}'.format(self.pid))
         self.pid = None
 

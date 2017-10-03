@@ -39,13 +39,14 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
         """ Initialize a process from a directory.
         """
         paths = cls.paths_cls(root)
-        if not all(p.exists() for p in [
-                paths.meta, paths.seeds, paths.page_clf, paths.link_clf]):
+        if not all(p.exists() for p in [paths.pid, paths.meta, paths.seeds,
+                                        paths.page_clf, paths.link_clf]):
             return
         if not is_running(paths.root):
             logging.warning('Cleaning up job in {}.'.format(paths.root))
             subprocess.check_call(
                 ['docker-compose', 'down', '-v'], cwd=str(paths.root))
+            paths.pid.unlink()
             return
         with paths.seeds.open('rt', encoding='utf8') as f:
             seeds = [line.strip() for line in f]
@@ -103,6 +104,7 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
         logging.info('Starting crawl in {}'.format(self.paths.root))
         self._compose_call('up', '-d')
         self._compose_call('scale', 'crawler={}'.format(n_processes))
+        self.paths.pid.write_text(self.id_)
         logging.info('Crawl "{}" started'.format(self.id_))
 
     @staticmethod

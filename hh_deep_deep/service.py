@@ -203,7 +203,7 @@ class Service:
         process.start()
         self.running[id_] = process
 
-    def _stop_running(self, workspace_id):
+    def _stop_running(self, workspace_id: str):
         """ Stop all running processes for this workspace
         (should be at most 1 usually). If False is returned, no new process
         should be started.
