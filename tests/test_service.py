@@ -135,6 +135,7 @@ def test_crawler_service(kafka_client: pykafka.KafkaClient, check_login=False):
     login_result_consumer = C(crawler_service.login_result_producer._topic.name)
 
     input_producer = P(crawler_service.input_topic)
+    trainer_producer = P(trainer_service.input_topic)
     login_producer = P(crawler_service.login_consumer.topic.name)
 
     crawler_service_thread = threading.Thread(target=crawler_service.run)
@@ -175,6 +176,7 @@ def test_crawler_service(kafka_client: pykafka.KafkaClient, check_login=False):
             encode_message(stop_crawl_message(start_message['id'])))
         input_producer.produce(encode_message({'from-tests': 'stop'}))
         crawler_service_thread.join()
+        trainer_producer.produce(encode_message({'from-tests': 'stop'}))
         trainer_service_thread.join()
 
 
