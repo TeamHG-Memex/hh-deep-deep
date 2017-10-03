@@ -143,7 +143,7 @@ class Service:
                             'Dropping a message in unknown format: {}'
                             .format(value.keys() if hasattr(value, 'keys')
                                     else type(value)))
-                for value in self.delayed_requests.values():
+                for value in list(self.delayed_requests.values()):
                     executor.submit(self.start_crawl, value, delayed=True)
                 if self.supports_login:
                     for value in self._read_consumer(self.login_consumer):
@@ -171,6 +171,9 @@ class Service:
     @log_ignore_exception
     def start_crawl(self, request: Dict, delayed=False) -> None:
         workspace_id = request['workspace_id']
+        if delayed and workspace_id not in self.delayed_requests:
+            # multiple futures piling up
+            return
         id_ = request['id'] if 'id' in request else workspace_id
         if not delayed:
             logging.info('Got start crawl message with id "{id}", {n_urls} urls'
@@ -186,7 +189,6 @@ class Service:
         if delayed:
             logging.info('Delayed start with id "{id}", {n_urls} urls'
                          .format(id=id_, n_urls=len(request['urls'])))
-        if workspace_id in self.delayed_requests:
             del self.delayed_requests[workspace_id]
         kwargs = dict(self.crawler_process_kwargs)
         kwargs['seeds'] = request['urls']

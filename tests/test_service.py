@@ -89,6 +89,8 @@ def test_trainer_service(kafka_client: pykafka.KafkaClient):
     finally:
         # this is not part of the API, but it's convenient for tests
         input_producer.produce(encode_message(stop_crawl_message(ws_id)))
+        # stop delayed started crawl
+        input_producer.produce(encode_message(stop_crawl_message(ws_id)))
         input_producer.produce(encode_message({'from-tests': 'stop'}))
         trainer_service_thread.join()
 
