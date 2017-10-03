@@ -179,7 +179,7 @@ class Service:
             self._start_trainer_from_crawler(request)
             return
         if self.single_crawl:
-            delay_start = self._stop_running(request)
+            delay_start = self._stop_running(workspace_id)
             if delay_start:
                 self.delayed_requests[workspace_id] = request
                 return
@@ -221,9 +221,6 @@ class Service:
                         if dt < self.delay_stop:
                             should_stop = False
                             delay_start = True
-                            logging.info(
-                                'Process running only {:.0f} s, leaving'
-                                .format(dt))
                     if should_stop:
                         logging.info('Stopping old process {}, workspace {}'
                                      .format(p_id, workspace_id))
