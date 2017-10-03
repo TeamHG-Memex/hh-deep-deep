@@ -171,15 +171,7 @@ class Service:
         logging.info('Got start crawl message with id "{id}", {n_urls} urls'
                      .format(id=id_, n_urls=len(request['urls'])))
         if self.needs_model and 'link_model' not in request:
-            # Request from Sitehound: need to train a fresh deep-deep model.
-            logging.info('Re-routing start crawler request to trainer')
-            trainer_keys = {'workspace_id', 'page_model', 'urls'}
-            # Original page_limit goes to crawler_params.
-            trainer_request = {
-                k: request[k] for k in trainer_keys if k in request}
-            trainer_request['crawler_params'] = {
-                k: request[k] for k in request if k not in trainer_keys}
-            self.send(self.trainer_producer, trainer_request)
+            self._start_trainer_from_crawler(request)
             return
         if self.single_crawl:
             # Stop all running processes for this workspace
@@ -209,6 +201,17 @@ class Service:
                                      **kwargs)
         process.start()
         self.running[id_] = process
+
+    def _start_trainer_from_crawler(self, request: Dict):
+        # Request from Sitehound: need to train a fresh deep-deep model.
+        logging.info('Re-routing start crawler request to trainer')
+        trainer_keys = {'workspace_id', 'page_model', 'urls'}
+        # Original page_limit goes to crawler_params.
+        trainer_request = {
+            k: request[k] for k in trainer_keys if k in request}
+        trainer_request['crawler_params'] = {
+            k: request[k] for k in request if k not in trainer_keys}
+        self.send(self.trainer_producer, trainer_request)
 
     @log_ignore_exception
     def stop_crawl(self, request: Dict) -> None:
