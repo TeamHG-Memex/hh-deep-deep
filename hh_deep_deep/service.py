@@ -62,25 +62,21 @@ class Service:
         topic = lambda x: '{}{}'.format(self.queue_prefix, x)
         self.input_topic = topic('dd-{}-input'.format(self.queue_kind))
         logging.info('Listening on {} topic'.format(self.input_topic))
-        self.consumer = self._kafka_consumer(
-            self.input_topic, consumer_timeout_ms=100)
-        self.progress_producer = (
-            self._kafka_producer(self.output_topic('progress')))
-        self.pages_producer = (
-            self._kafka_producer(self.output_topic('pages')))
+        C = self._kafka_consumer
+        P = self._kafka_producer
+        self.consumer = C(self.input_topic, consumer_timeout_ms=100)
+        self.progress_producer = P(self.output_topic('progress'))
+        self.pages_producer = P(self.output_topic('pages'))
         if self.outputs_model:
-            self.model_producer = (
-                self._kafka_producer(self.output_topic('model')))
+            self.model_producer = P(self.output_topic('model'))
+            self.crawler_producer = P(topic('dd-crawler-input'))
         if self.needs_model:
-            self.trainer_producer = (
-                self._kafka_producer(topic('dd-trainer-input')))
-        self.events_producer = self._kafka_producer(topic('events-input'))
+            self.trainer_producer = P(topic('dd-trainer-input'))
+        self.events_producer = P(topic('events-input'))
         if self.supports_login:
-            self.login_consumer = self._kafka_consumer(topic('dd-login-output'))
-            self.login_output_producer = (
-                self._kafka_producer(topic('dd-login-input')))
-            self.login_result_producer = (
-                self._kafka_producer(topic('dd-login-result')))
+            self.login_consumer = C(topic('dd-login-output'))
+            self.login_output_producer = P(topic('dd-login-input'))
+            self.login_result_producer = P(topic('dd-login-result'))
 
         self.crawler_process_kwargs = dict(crawler_process_kwargs)
         if self.jobs_prefix:
@@ -176,7 +172,12 @@ class Service:
         if self.needs_model and 'link_model' not in request:
             # Request from Sitehound: need to train a fresh deep-deep model.
             logging.info('Re-routing start crawler request to trainer')
-            trainer_request = dict(request, start_crawler=True)
+            trainer_keys = {'workspace_id', 'page_model', 'urls'}
+            # Original page_limit goes to crawler_params.
+            trainer_request = {
+                k: request[k] for k in trainer_keys if k in request}
+            trainer_request['crawler_params'] = {
+                k: request[k] for k in request if k not in trainer_keys}
             self.send(self.trainer_producer, trainer_request)
             return
         if self.single_crawl:
@@ -195,7 +196,8 @@ class Service:
             kwargs['page_clf_data'] = decode_model_data(request['page_model'])
         if 'link_model' in request:
             kwargs['link_clf_data'] = decode_model_data(request['link_model'])
-        optional_fields = ['page_limit', 'broadness', 'login_credentials']
+        optional_fields = [
+            'page_limit', 'broadness', 'login_credentials', 'crawler_params']
         kwargs.update({field: request[field] for field in optional_fields
                        if field in request})
         process = self.process_class(id_=id_, workspace_id=workspace_id,
@@ -217,20 +219,28 @@ class Service:
     @log_ignore_exception
     def send_updates(self):
         for id_, process in list(self.running.items()):
-            send_stopped = False
-            if not process.is_running():
+            is_running = process.is_running()
+            if not is_running:
                 logging.warning(
                     'Crawl should be running but it\'s not, stopping.')
                 process.stop(verbose=True)
                 self.running.pop(id_)
-                send_stopped = True
             updates = process.get_updates()
             self.send_progress_update(process, updates)
-            if hasattr(process, 'get_new_model'):
+            if self.outputs_model:
                 new_model_data = process.get_new_model()
                 if new_model_data:
                     self.send_model_update(process.workspace_id, new_model_data)
-            if send_stopped:
+                if not is_running and process.crawler_params is not None:
+                    # trainer was called by crawler: need to send back the
+                    # start message.
+                    model_data = new_model_data or process.get_model()
+                    if model_data:
+                        self.send_start_crawler(process, model_data)
+                    else:
+                        logging.warning(
+                            'No model for crawler produced by trainer')
+            if not is_running:
                 self.send_stopped_message(process)
 
     def output_topic(self, name: str) -> str:
@@ -282,6 +292,17 @@ class Service:
                      .format(len(encoded_model)))
         self.send(self.model_producer,
                   {'workspace_id': ws_id, 'link_model': encoded_model})
+
+    def send_start_crawler(self, process: DeepDeepProcess, model_data: bytes):
+        message = dict(process.crawler_params)
+        message.update({
+            'workspace_id': process.workspace_id,
+            'urls': process.seeds,
+            'page_model': encode_model_data(process.page_clf_data),
+            'link_model': encode_model_data(model_data),
+        })
+        logging.info('Sending crawler start message')
+        self.send(self.crawler_producer, message)
 
     def send_stopped_message(self, process: CrawlProcess):
         self.send(self.events_producer, {

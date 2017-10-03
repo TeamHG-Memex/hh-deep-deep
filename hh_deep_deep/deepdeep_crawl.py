@@ -28,9 +28,11 @@ class DeepDeepProcess(CrawlProcess):
                  page_clf_data: bytes,
                  root: Path=None,
                  checkpoint_interval: int=1000,
+                 crawler_params: Dict=None,
                  **kwargs):
         super().__init__(**kwargs)
         self.page_limit = self.page_limit or 10000
+        self.crawler_params = crawler_params
         self.paths = self.path_cls(
             root or gen_job_path(self.id_, self.jobs_root))
         self.log_follower = JsonLinesFollower(self.paths.items)
@@ -173,14 +175,19 @@ class DeepDeepProcess(CrawlProcess):
     def get_new_model(self) -> Optional[bytes]:
         """ Return a data of the new model (if there is any), or None.
         """
+        return self.get_model(only_new=True)
+
+    def get_model(self, only_new=False) -> Optional[bytes]:
+        """ Return a data of the last model (if there is any), or None.
+        """
         model_files = sorted(
             self.paths.root.glob('Q-*.joblib'),
             key=lambda p: int(re.match(r'Q-(\d+)\.joblib', p.name).groups()[0])
         )
         if model_files:
             model_file = model_files[-1]
-            if model_file != self.last_model_file:
-                logging.info('Sending new model from {}'.format(model_file))
+            if not only_new or model_file != self.last_model_file:
+                logging.info('Sending model from {}'.format(model_file))
                 self.last_model_file = model_file
                 return model_file.read_bytes()
 

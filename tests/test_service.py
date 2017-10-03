@@ -127,7 +127,8 @@ def test_crawler_service(kafka_client: pykafka.KafkaClient, check_login=False):
     crawler_service = ATestService(
         'crawler', check_updates_every=2, max_workers=2, debug=DEBUG)
     trainer_service = ATestService(
-        'trainer', check_updates_every=2, debug=DEBUG)
+        'trainer', check_updates_every=2,
+        checkpoint_interval=10, page_limit=50, debug=DEBUG)
     progress_consumer = C(crawler_service.output_topic('progress'))
     pages_consumer = C(crawler_service.output_topic('pages'))
     login_consumer = C(crawler_service.login_output_producer._topic.name)
