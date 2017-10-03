@@ -138,7 +138,16 @@ def test_crawler_service(kafka_client: pykafka.KafkaClient, check_login=False):
     debug('Sending start crawler message')
     input_producer.produce(encode_message(start_message))
     try:
-        _check_progress_pages(progress_consumer, pages_consumer)
+        # want to get progress from trainer first
+        while True:
+            progress = _check_progress_pages(progress_consumer, pages_consumer)
+            if 'Trainer' in progress:
+                break
+        # and then from the crawler
+        while True:
+            progress = _check_progress_pages(progress_consumer, pages_consumer)
+            if 'Trainer' not in progress:
+                break
         if check_login:
             debug('Waiting for login message...')
             login_message = consume(login_consumer)

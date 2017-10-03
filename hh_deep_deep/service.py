@@ -13,7 +13,7 @@ import pykafka
 from pykafka.common import OffsetType
 
 from .crawl_utils import CrawlProcess, get_domain
-from .deepdeep_crawl import DeepDeepProcess
+from .deepdeep_crawl import DeepDeepProcess, is_trainer_started_by_crawler
 from .dd_crawl import DDCrawlerProcess
 from .deep_crawl import DeepCrawlerProcess
 from .utils import configure_logging, log_ignore_exception
@@ -69,6 +69,8 @@ class Service:
         self.pages_producer = P(self.output_topic('pages'))
         if self.outputs_model:
             self.crawler_producer = P(topic('dd-crawler-input'))
+            self.crawler_progress_producer = (
+                P(topic('dd-crawler-output-progress')))
         if self.needs_model:
             self.trainer_producer = P(topic('dd-trainer-input'))
         self.events_producer = P(topic('events-input'))
@@ -228,9 +230,8 @@ class Service:
                     'Crawl should be running but it\'s not, stopping.')
                 process.stop(verbose=True)
                 self.running.pop(id_)
-            if not is_trainer_started_by_crawler(process):
-                updates = process.get_updates()
-                self.send_progress_update(process, updates)
+            updates = process.get_updates()
+            self.send_progress_update(process, updates)
             if not is_running and is_trainer_started_by_crawler(process):
                 # trainer was called by crawler and it's done training:
                 # need to send back the start message.
@@ -246,16 +247,21 @@ class Service:
         id_ = process.id_
         progress = updates.get('progress')
         if progress is not None:
-            progress_topic = self.output_topic('progress')
             progress_message = {process.id_field: id_, 'progress': progress}
             if self.needs_percentage_done:
                 progress_message['percentage_done'] = \
                     updates.get('percentage_done', 0)
             if progress_message != self.previous_progress.get(process):
-                logging.info('Sending update for "{}" to {}: {}'
-                             .format(id_, progress_topic, progress_message))
+                logging.info('Sending update for "{}": {}'
+                             .format(id_, progress_message))
                 self.previous_progress[process] = progress_message
-                self.send(self.progress_producer, progress_message)
+                if is_trainer_started_by_crawler(process):
+                    progress_producer = self.crawler_progress_producer
+                else:
+                    progress_producer = self.progress_producer
+                self.send(progress_producer, progress_message)
+        if is_trainer_started_by_crawler(process):
+            return  # no other updates needed, only progress
         page_samples = updates.get('pages')
         if page_samples:
             for p in page_samples:
@@ -335,11 +341,6 @@ class Service:
             logging.info('Saving {} message to {}'.format(kind, filename))
             with gzip.open(filename, 'wb') as f:
                 f.write(message)
-
-
-def is_trainer_started_by_crawler(process):
-    return (isinstance(process, DeepDeepProcess) and
-            process.crawler_params is not None)
 
 
 def output_topic(queue_prefix, queue_kind, name):

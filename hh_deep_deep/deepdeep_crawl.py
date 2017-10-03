@@ -5,10 +5,11 @@ import logging
 from pathlib import Path
 import re
 import subprocess
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .crawl_utils import (
     CrawlPaths, CrawlProcess, gen_job_path, JsonLinesFollower)
+from .dd_utils import DEFAULT_CRAWLER_PAGE_LIMIT
 
 
 class DeepDeepPaths(CrawlPaths):
@@ -154,15 +155,21 @@ class DeepDeepProcess(CrawlProcess):
         last_items = deque(self.log_follower.get_new_items(), maxlen=n_last)
         if last_items:
             last_item = last_items[-1]
-            item_progress = get_progress_from_item(last_item)
+            progress = get_progress_from_item(last_item)
             pages = [get_sample_from_item(item) for item in last_items
                      if 'url' in item]
-            return {'progress': item_progress,
+            response_received = last_item.get('response_received_count', 0)
+            percentage_done = 100 * response_received / self.page_limit
+            if is_trainer_started_by_crawler(self):
+                progress = 'Trainer: {}'.format(progress)
+                crawler_page_limit = self.crawler_params.get(
+                    'page_limit', DEFAULT_CRAWLER_PAGE_LIMIT)
+                trainer_ratio = (self.page_limit /
+                                 (self.page_limit + crawler_page_limit))
+                percentage_done *= trainer_ratio
+            return {'progress': progress,
                     'pages': pages,
-                    'percentage_done': (
-                        100 * last_item.get('response_received_count', 0) /
-                        self.page_limit),
-                    }
+                    'percentage_done': percentage_done}
         return {}
 
     def get_model(self) -> Optional[bytes]:
@@ -176,6 +183,11 @@ class DeepDeepProcess(CrawlProcess):
             model_file = model_files[-1]
             logging.info('Reading model from {}'.format(model_file))
             return model_file.read_bytes()
+
+
+def is_trainer_started_by_crawler(process):
+    return (isinstance(process, DeepDeepProcess) and
+            process.crawler_params is not None)
 
 
 def get_sample_from_item(item: Dict) -> Dict:

@@ -19,6 +19,9 @@ class BaseDDPaths(CrawlPaths):
         self.login_credentials = self.root.joinpath('login_credentials.json')
 
 
+DEFAULT_CRAWLER_PAGE_LIMIT = 10000000
+
+
 class BaseDDCrawlerProcess(CrawlProcess):
     default_docker_image = 'dd-crawler-hh'
     paths_cls = BaseDDPaths
@@ -32,7 +35,7 @@ class BaseDDCrawlerProcess(CrawlProcess):
         self.paths = self.paths_cls(
             root or gen_job_path(self.id_, self.jobs_root))
         self.max_workers = max_workers
-        self.page_limit = self.page_limit or 10000000
+        self.page_limit = self.page_limit or DEFAULT_CRAWLER_PAGE_LIMIT
         self.login_credentials = login_credentials or []
         if self.login_credentials:
             # convert from service API format to dd-crawler format
