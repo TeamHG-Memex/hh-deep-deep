@@ -73,6 +73,8 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
         self.paths.workspace_id.write_text(self.workspace_id)
         self.paths.page_clf.write_bytes(self.page_clf_data)
         self.paths.link_clf.write_bytes(self.link_clf_data)
+        # Create out/media beforehand to prevent a race condition
+        self.paths.out.joinpath('media').mkdir(parents=True)
         self.paths.seeds.write_text(
             '\n'.join(url for url in self.seeds), encoding='utf8')
         with self.paths.login_credentials.open('wt', encoding='utf8') as f:
