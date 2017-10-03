@@ -67,47 +67,7 @@ def create_topics():
 
 
 @pytest.mark.slow
-def test_trainer_service(kafka_client):
-    _test_service(kafka_client, run_trainer=True, run_crawler=False)
-
-
-@pytest.mark.slow
-def test_crawler_service(kafka_client):
-    _test_service(kafka_client, run_trainer=False, run_crawler=True)
-
-
-@pytest.mark.slow
-def test_service(kafka_client):
-    _test_service(kafka_client, run_trainer=True, run_crawler=True)
-
-
-def _test_service(kafka_client, run_trainer, run_crawler):
-    # This is a big integration test, better run with "-s"
-    ws_id = 'test-ws-id'
-    start_crawler_message = None
-    start_message_path = Path('.tst.start-crawler.pkl')
-    if not run_trainer:
-        if start_message_path.exists():
-            with start_message_path.open('rb') as f:
-                start_crawler_message = pickle.load(f)
-                debug('Loaded cached start crawler message')
-        else:
-            debug('No cached start dd_crawl message found, must run trainer')
-            run_trainer = True
-    if run_trainer:
-        start_crawler_message = _test_trainer_service(ws_id, kafka_client)
-        with start_message_path.open('wb') as f:
-            pickle.dump(start_crawler_message, f)
-    assert start_crawler_message is not None
-
-    if run_crawler:
-        _test_crawler_service(start_crawler_message, kafka_client)
-
-
-def _test_trainer_service(
-        ws_id: str, kafka_client: pykafka.KafkaClient) -> Dict:
-    """ Test trainer service, return start message for crawler service.
-    """
+def test_trainer_service(kafka_client: pykafka.KafkaClient):
     C = lambda t: make_consumer(kafka_client, t)
     P = lambda t: make_producer(kafka_client, t)
     trainer_service = ATestService(
@@ -121,8 +81,9 @@ def _test_trainer_service(
     trainer_service_thread = threading.Thread(target=trainer_service.run)
     trainer_service_thread.start()
 
-    debug('Sending start trainer message')
+    ws_id = 'test-ws-id'
     start_message = start_trainer_message(ws_id)
+    debug('Sending start trainer message')
     input_producer.produce(encode_message(start_message))
     debug('Sending another start trainer message (old should stop)')
     input_producer.produce(encode_message(start_message))
@@ -142,9 +103,6 @@ def _test_trainer_service(
         input_producer.produce(encode_message({'from-tests': 'stop'}))
         trainer_service_thread.join()
 
-    start_message['link_model'] = link_model
-    return start_message
-
 
 def _check_progress_pages(progress_consumer, pages_consumer,
                           check_trainer=False):
@@ -160,18 +118,16 @@ def _check_progress_pages(progress_consumer, pages_consumer,
             return progress
 
 
-def _test_crawler_service(
-        start_message: Dict, kafka_client: pykafka.KafkaClient,
-        check_login=False,
-        ) -> None:
+@pytest.mark.slow
+def test_crawler_service(kafka_client: pykafka.KafkaClient, check_login=False):
     # login check if not 100% reliable as it's run against a live website,
     # it's tested properly in test_deepcrawl
-    start_message['broadness'] = 'N10'
-    start_message['id'] = 'test-id'
-    crawler_service = ATestService(
-        'crawler', check_updates_every=2, max_workers=2, debug=DEBUG)
     C = lambda t: make_consumer(kafka_client, t)
     P = lambda t: make_producer(kafka_client, t)
+    crawler_service = ATestService(
+        'crawler', check_updates_every=2, max_workers=2, debug=DEBUG)
+    trainer_service = ATestService(
+        'trainer', check_updates_every=2, debug=DEBUG)
     progress_consumer = C(crawler_service.output_topic('progress'))
     pages_consumer = C(crawler_service.output_topic('pages'))
     login_consumer = C(crawler_service.login_output_producer._topic.name)
@@ -182,7 +138,13 @@ def _test_crawler_service(
 
     crawler_service_thread = threading.Thread(target=crawler_service.run)
     crawler_service_thread.start()
+    trainer_service_thread = threading.Thread(target=trainer_service.run)
+    trainer_service_thread.start()
 
+    ws_id = 'test-ws-id'
+    start_message = start_trainer_message(ws_id)
+    start_message['broadness'] = 'N10'
+    start_message['id'] = 'test-id'
     debug('Sending start crawler message')
     input_producer.produce(encode_message(start_message))
     try:
@@ -212,6 +174,7 @@ def _test_crawler_service(
             encode_message(stop_crawl_message(start_message['id'])))
         input_producer.produce(encode_message({'from-tests': 'stop'}))
         crawler_service_thread.join()
+        trainer_service_thread.join()
 
 
 def debug(arg, *args: List[str]) -> None:

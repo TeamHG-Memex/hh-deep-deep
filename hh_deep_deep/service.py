@@ -36,7 +36,7 @@ class Service:
         self.queue_kind = queue_kind
         self.required_keys = ['workspace_id', 'urls'] + {
             'trainer': ['page_model'],
-            'crawler': ['id', 'page_model', 'link_model'],
+            'crawler': ['id', 'page_model'],
             'deepcrawler': ['id'],
             }[queue_kind]
         self.process_class = {
@@ -46,8 +46,9 @@ class Service:
             }[queue_kind]
         self.needs_percentage_done = queue_kind != 'deepcrawler'
         self.single_crawl = queue_kind != 'deepcrawler'
-        self.supports_login = self.queue_kind in {'crawler', 'deepcrawler'}
+        self.supports_login = queue_kind in {'crawler', 'deepcrawler'}
         self.outputs_model = queue_kind == 'trainer'
+        self.needs_model = queue_kind == 'crawler'
 
         kafka_kwargs = {}
         if kafka_host is not None:
@@ -70,6 +71,9 @@ class Service:
         if self.outputs_model:
             self.model_producer = (
                 self._kafka_producer(self.output_topic('model')))
+        if self.needs_model:
+            self.trainer_producer = (
+                self._kafka_producer(topic('dd-trainer-input')))
         self.events_producer = self._kafka_producer(topic('events-input'))
         if self.supports_login:
             self.login_consumer = self._kafka_consumer(topic('dd-login-output'))
@@ -167,10 +171,16 @@ class Service:
     def start_crawl(self, request: Dict) -> None:
         workspace_id = request['workspace_id']
         id_ = request['id'] if 'id' in request else workspace_id
-        logging.info('Got start crawl message with id "{id}", {n_urls} urls.'
+        logging.info('Got start crawl message with id "{id}", {n_urls} urls'
                      .format(id=id_, n_urls=len(request['urls'])))
+        if self.needs_model and 'link_model' not in request:
+            # Request from Sitehound: need to train a fresh deep-deep model.
+            logging.info('Re-routing start crawler request to trainer')
+            trainer_request = dict(request, start_crawler=True)
+            self.send(self.trainer_producer, trainer_request)
+            return
         if self.single_crawl:
-            # stop all running processes for this workspace
+            # Stop all running processes for this workspace
             # (should be at most 1 usually)
             for p_id, process in list(self.running.items()):
                 if process.workspace_id == workspace_id:
@@ -283,7 +293,11 @@ class Service:
         })
 
     @log_ignore_exception
-    def handle_login(self, value: dict):
+    def handle_model(self, value: Dict):
+        pass # TODO - if this is the final model, we can start the crawl
+
+    @log_ignore_exception
+    def handle_login(self, value: Dict):
         process = self.running.get(value['job_id'])  # type: DDCrawlerProcess
         if process is None:
             logging.info(
