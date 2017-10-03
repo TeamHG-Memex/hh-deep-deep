@@ -133,8 +133,11 @@ def test_crawler_service(kafka_client: pykafka.KafkaClient, check_login=False):
 
     ws_id = 'test-ws-id'
     start_message = start_trainer_message(ws_id)
-    start_message['broadness'] = 'N10'
-    start_message['id'] = 'test-id'
+    start_message.update({
+        'broadness': 'N10',
+        'id': 'test-id',
+        'page_limit': 500,
+    })
     debug('Sending start crawler message')
     input_producer.produce(encode_message(start_message))
     try:

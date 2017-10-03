@@ -19,6 +19,9 @@ class DeepDeepPaths(CrawlPaths):
         self.items = self.root.joinpath('items.jl')
 
 
+DEFAULT_TRAINER_PAGE_LIMIT = 10000
+
+
 class DeepDeepProcess(CrawlProcess):
     id_field = 'workspace_id'
     _jobs_root = Path('deep-deep-jobs')
@@ -32,7 +35,7 @@ class DeepDeepProcess(CrawlProcess):
                  crawler_params: Dict=None,
                  **kwargs):
         super().__init__(**kwargs)
-        self.page_limit = self.page_limit or 10000
+        self.page_limit = self.page_limit or DEFAULT_TRAINER_PAGE_LIMIT
         self.crawler_params = crawler_params
         self.paths = self.path_cls(
             root or gen_job_path(self.id_, self.jobs_root))

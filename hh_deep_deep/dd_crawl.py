@@ -6,10 +6,11 @@ import re
 import math
 import multiprocessing
 import subprocess
-from typing import Any, Dict, Optional, List, Set
+from typing import Any, Dict, Optional
 
-from .crawl_utils import CrawlPaths, JsonLinesFollower, get_domain
+from .crawl_utils import JsonLinesFollower
 from .dd_utils import BaseDDPaths, BaseDDCrawlerProcess, is_running
+from .deepdeep_crawl import DEFAULT_TRAINER_PAGE_LIMIT
 
 
 class DDCrawlerPaths(BaseDDPaths):
@@ -159,7 +160,12 @@ class DDCrawlerProcess(BaseDDCrawlerProcess):
                         n_relevant_domains=n_relevant_domains,
                         mean_score=100 * total_score / n_crawled,
                     ))
-                updates['percentage_done'] = 100 * n_crawled / self.page_limit
+                # This is correct as long as trainer crawler is really run
+                # for DEFAULT_TRAINER_PAGE_LIMIT. It's not the case in tests,
+                # but is true in production, where we don't set a custom limit.
+                updates['percentage_done'] = 100 * (
+                    (n_crawled + DEFAULT_TRAINER_PAGE_LIMIT) /
+                    (self.page_limit + DEFAULT_TRAINER_PAGE_LIMIT))
         else:
             updates['progress'] = 'Crawl is not running yet'
         return updates
