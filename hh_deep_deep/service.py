@@ -306,10 +306,6 @@ class Service:
         })
 
     @log_ignore_exception
-    def handle_model(self, value: Dict):
-        pass # TODO - if this is the final model, we can start the crawl
-
-    @log_ignore_exception
     def handle_login(self, value: Dict):
         process = self.running.get(value['job_id'])  # type: DDCrawlerProcess
         if process is None:
