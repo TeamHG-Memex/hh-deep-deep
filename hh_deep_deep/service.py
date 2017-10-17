@@ -289,6 +289,7 @@ class Service:
                 self.previous_progress[process] = progress_message
                 if is_trainer_started_by_crawler(process):
                     progress_producer = self.crawler_progress_producer
+                    progress_message['id'] = process.crawler_params['id']
                 else:
                     progress_producer = self.progress_producer
                 self.send(progress_producer, progress_message)

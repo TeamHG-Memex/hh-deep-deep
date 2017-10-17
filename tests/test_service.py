@@ -85,7 +85,7 @@ def test_trainer_service(kafka_client: pykafka.KafkaClient):
     debug('Sending another start trainer message (old should continue)')
     input_producer.produce(encode_message(start_message))
     try:
-        _check_progress_pages(progress_consumer, pages_consumer)
+        _check_progress_pages(progress_consumer, pages_consumer, check_id=False)
     finally:
         # this is not part of the API, but it's convenient for tests
         input_producer.produce(encode_message(stop_crawl_message(ws_id)))
@@ -95,13 +95,15 @@ def test_trainer_service(kafka_client: pykafka.KafkaClient):
         trainer_service_thread.join()
 
 
-def _check_progress_pages(progress_consumer, pages_consumer):
+def _check_progress_pages(progress_consumer, pages_consumer, check_id=True):
     while True:
         debug('Waiting for pages message...')
         check_pages(consume(pages_consumer))
         debug('Got it, now waiting for progress message...')
         progress_message = consume(progress_consumer)
         debug('Got it:', progress_message.get('progress'))
+        if check_id:
+            assert progress_message.get('id')
         progress = check_progress(progress_message)
         if progress:
             return progress
