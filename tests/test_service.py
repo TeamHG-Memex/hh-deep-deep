@@ -207,8 +207,7 @@ def check_progress(value):
 def check_pages(value):
     if 'id' in value:
         assert value['id'] == 'test-id'
-    else:
-        assert value['workspace_id'] == 'test-ws-id'
+    assert value['workspace_id'] == 'test-ws-id'
     page_samples = value['page_samples']
     assert len(page_samples) >= 1
     for s in page_samples:
