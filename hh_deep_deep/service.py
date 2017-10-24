@@ -36,18 +36,20 @@ class Service:
         self.queue_kind = queue_kind
         self.required_keys = ['workspace_id', 'urls'] + {
             'trainer': ['page_model'],
+            'crawler-trainer': ['id', 'page_model'],
             'crawler': ['id', 'page_model'],
             'deepcrawler': ['id'],
             }[queue_kind]
         self.process_class = {
             'trainer': DeepDeepProcess,
+            'crawler-trainer': DeepDeepProcess,
             'crawler': DDCrawlerProcess,
             'deepcrawler': DeepCrawlerProcess,
             }[queue_kind]
         self.needs_percentage_done = queue_kind != 'deepcrawler'
         self.single_crawl = queue_kind != 'deepcrawler'
         self.supports_login = queue_kind in {'crawler', 'deepcrawler'}
-        self.outputs_model = queue_kind == 'trainer'
+        self.outputs_model = queue_kind == 'crawler-trainer'
         self.needs_model = queue_kind == 'crawler'
         self.delay_stop = 300 if queue_kind == 'trainer' else 0
         self.delayed_requests = {}  # workspace_id -> request
@@ -74,7 +76,7 @@ class Service:
             self.crawler_progress_producer = (
                 P(topic('dd-crawler-output-progress')))
         if self.needs_model:
-            self.trainer_producer = P(topic('dd-trainer-input'))
+            self.crawler_trainer_producer = P(topic('dd-crawler-trainer-input'))
         self.events_producer = P(topic('events-input'))
         if self.supports_login:
             self.login_consumer = C(topic('dd-login-output'))
@@ -213,34 +215,30 @@ class Service:
         delay_start = False
         for p_id, process in list(self.running.items()):
             if process.workspace_id == workspace_id:
-                if is_trainer_started_by_crawler(process):
-                    logging.info(
-                        'Keeping trainer started by crawler running')
-                else:
-                    should_stop = True
-                    if self.delay_stop:
-                        dt = time.time() - process.start_time
-                        if dt < self.delay_stop:
-                            should_stop = False
-                            delay_start = True
-                    if should_stop:
-                        logging.info('Stopping old process {}, workspace {}'
-                                     .format(p_id, workspace_id))
-                        process.stop()
-                        self.running.pop(p_id, None)
-                        self.send_stopped_message(process)
+                should_stop = True
+                if self.delay_stop:
+                    dt = time.time() - process.start_time
+                    if dt < self.delay_stop:
+                        should_stop = False
+                        delay_start = True
+                if should_stop:
+                    logging.info('Stopping old process {}, workspace {}'
+                                 .format(p_id, workspace_id))
+                    process.stop()
+                    self.running.pop(p_id, None)
+                    self.send_stopped_message(process)
         return delay_start
 
     def _start_trainer_from_crawler(self, request: Dict):
         # Request from Sitehound: need to train a fresh deep-deep model.
-        logging.info('Re-routing start crawler request to trainer')
+        logging.info('Re-routing start crawler request to crawler-trainer')
         trainer_keys = {'id', 'workspace_id', 'page_model', 'urls'}
         # Original page_limit goes to crawler_params.
         trainer_request = {
             k: request[k] for k in trainer_keys if k in request}
         trainer_request['crawler_params'] = {
             k: request[k] for k in request if k not in trainer_keys}
-        self.send(self.trainer_producer, trainer_request)
+        self.send(self.crawler_trainer_producer, trainer_request)
 
     @log_ignore_exception
     def stop_crawl(self, request: Dict) -> None:
@@ -326,7 +324,7 @@ class Service:
     def send_start_crawler(self, process: DeepDeepProcess):
         model_data = process.get_model()
         if not model_data:
-            logging.warning('No model for crawler produced by trainer')
+            logging.warning('No model for crawler produced by crawler-trainer')
             return
         message = dict(process.crawler_params)
         message.update({
@@ -398,7 +396,8 @@ def decode_model_data(data: Optional[str]) -> bytes:
 def main():
     parser = argparse.ArgumentParser()
     arg = parser.add_argument
-    arg('kind', choices=['trainer', 'crawler', 'deepcrawler'])
+    arg('kind',
+        choices=['trainer', 'crawler-trainer', 'crawler', 'deepcrawler'])
     arg('--docker-image', help='Name of docker image for the crawler')
     arg('--kafka-host')
     arg('--host-root', help='Pass host ${PWD} if running in a docker container')
