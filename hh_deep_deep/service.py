@@ -234,7 +234,7 @@ class Service:
     def _start_trainer_from_crawler(self, request: Dict):
         # Request from Sitehound: need to train a fresh deep-deep model.
         logging.info('Re-routing start crawler request to trainer')
-        trainer_keys = {'workspace_id', 'page_model', 'urls'}
+        trainer_keys = {'id', 'workspace_id', 'page_model', 'urls'}
         # Original page_limit goes to crawler_params.
         trainer_request = {
             k: request[k] for k in trainer_keys if k in request}
@@ -280,14 +280,16 @@ class Service:
         progress = updates.get('progress')
         if progress is not None:
             progress_message = {process.id_field: id_, 'progress': progress}
+            progress_message['workspace_id'] = process.workspace_id
             if self.needs_percentage_done:
                 progress_message['percentage_done'] = \
                     updates.get('percentage_done', 0)
+            if is_trainer_started_by_crawler(process):
+                progress_message['id'] = process.id_
             if progress_message != self.previous_progress.get(process):
                 self.previous_progress[process] = progress_message
                 if is_trainer_started_by_crawler(process):
                     progress_producer = self.crawler_progress_producer
-                    progress_message['id'] = process.crawler_params['id']
                 else:
                     progress_producer = self.progress_producer
                 logging.info('Sending update for "{}": {}'
@@ -328,6 +330,7 @@ class Service:
             return
         message = dict(process.crawler_params)
         message.update({
+            'id': process.id_,
             'workspace_id': process.workspace_id,
             'urls': process.seeds,
             'page_model': encode_model_data(process.page_clf_data),
