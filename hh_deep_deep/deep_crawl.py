@@ -13,8 +13,6 @@ from .dd_utils import BaseDDCrawlerProcess, is_running
 
 
 class DeepCrawlerProcess(BaseDDCrawlerProcess):
-    _jobs_root = Path('deep-jobs')
-
     def __init__(self, *args,
                  in_flight_ttl=60,
                  idle_before_close=100,

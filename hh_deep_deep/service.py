@@ -5,6 +5,7 @@ import gzip
 import hashlib
 import logging
 import json
+from pathlib import Path
 import time
 from typing import Any, Dict, Optional
 import zlib
@@ -83,11 +84,11 @@ class Service:
             self.login_output_producer = P(topic('dd-login-input'))
             self.login_result_producer = P(topic('dd-login-result'))
 
-        self.crawler_process_kwargs = dict(crawler_process_kwargs)
-        if self.jobs_prefix:
-            self.crawler_process_kwargs['jobs_prefix'] = self.jobs_prefix
-        self.running = self.process_class.load_all_running(
-            **self.crawler_process_kwargs)
+        self.crawler_process_kwargs = dict(
+            crawler_process_kwargs,
+            jobs_root=get_jobs_root(queue_kind, self.jobs_prefix))
+        self.running = (
+            self.process_class.load_all_running(**self.crawler_process_kwargs))
         if self.running:
             for id_, process in sorted(self.running.items()):
                 logging.info('Already running crawl "{id}", in {root}'
@@ -373,6 +374,14 @@ class Service:
             logging.info('Saving {} message to {}'.format(kind, filename))
             with gzip.open(filename, 'wb') as f:
                 f.write(message)
+
+
+def get_jobs_root(queue_kind: str, jobs_prefix: Optional[str]) -> Path:
+    name = '{}-jobs'.format(queue_kind)
+    if jobs_prefix:
+        return Path(jobs_prefix).joinpath(name)
+    else:
+        return Path(name)
 
 
 def output_topic(queue_prefix, queue_kind, name):

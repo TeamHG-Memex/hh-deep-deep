@@ -39,7 +39,6 @@ class CrawlPaths:
 
 class CrawlProcess:
     id_field = 'id'
-    _jobs_root = None
     default_docker_image = None
     target_sample_rate_pm = 10  # per minute
 
@@ -47,9 +46,9 @@ class CrawlProcess:
                  id_: str,
                  workspace_id: str,
                  seeds: List[str],
+                 jobs_root: Path,
                  docker_image: str=None,
                  host_root: str=None,
-                 jobs_prefix: str=None,
                  page_limit: int=None,
                  proxy_container: str=None,
                  test_server_container: str=None):
@@ -58,7 +57,7 @@ class CrawlProcess:
         self.seeds = seeds
         self.docker_image = docker_image or self.default_docker_image
         self.host_root = Path(host_root or '.').absolute()
-        self.jobs_prefix = jobs_prefix
+        self.jobs_root = jobs_root
         self.page_limit = page_limit
         self.proxy_container = proxy_container
         self.test_server_container = test_server_container
@@ -66,22 +65,12 @@ class CrawlProcess:
         self.last_page = None  # last page sample sent in self.get_updates
         self.last_page_time = None
 
-    @property
-    def jobs_root(self) -> Path:
-        return self.get_jobs_root(self.jobs_prefix)
-
-    @classmethod
-    def get_jobs_root(cls, jobs_prefix) -> Path:
-        if jobs_prefix:
-            return Path(jobs_prefix).joinpath(cls._jobs_root)
-        return cls._jobs_root
-
     @classmethod
     def load_all_running(cls, **kwargs) -> Dict[str, 'CrawlProcess']:
         """ Return a dictionary of currently running processes.
         """
         running = {}
-        jobs_root = cls.get_jobs_root(kwargs.get('jobs_prefix'))
+        jobs_root = kwargs['jobs_root']
         logging.info('Loading jobs from {}'.format(jobs_root))
         if jobs_root.exists():
             for job_root in sorted(jobs_root.iterdir()):

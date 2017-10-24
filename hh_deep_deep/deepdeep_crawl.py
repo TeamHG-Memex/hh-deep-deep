@@ -25,7 +25,6 @@ DEFAULT_TRAINER_PAGE_LIMIT = 10000
 
 class DeepDeepProcess(CrawlProcess):
     id_field = 'workspace_id'
-    _jobs_root = Path('deep-deep-jobs')
     default_docker_image = 'deep-deep-hh'
     path_cls = DeepDeepPaths
 

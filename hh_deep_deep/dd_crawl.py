@@ -21,7 +21,6 @@ class DDCrawlerPaths(BaseDDPaths):
 
 
 class DDCrawlerProcess(BaseDDCrawlerProcess):
-    _jobs_root = Path('dd-jobs')
     paths_cls = DDCrawlerPaths
 
     def __init__(self, *,
