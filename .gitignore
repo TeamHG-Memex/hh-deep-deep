@@ -4,6 +4,5 @@ __pycache__
 .coverage
 .coverage.*
 htmlcov
-dd-jobs
-deep-deep-jobs
+*-jobs
 venv

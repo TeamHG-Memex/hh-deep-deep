@@ -11,7 +11,7 @@ services:
         condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./deep-deep-jobs:/opt/hh-deep-deep/trainer-jobs
+      - ./trainer-jobs:/opt/hh-deep-deep/trainer-jobs
     command:
       - hh-deep-deep-service
       - trainer
@@ -45,7 +45,7 @@ services:
         condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./dd-jobs:/opt/hh-deep-deep/crawler-jobs
+      - ./crawler-jobs:/opt/hh-deep-deep/crawler-jobs
     command:
       - hh-deep-deep-service
       - crawler
@@ -63,7 +63,7 @@ services:
         condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./deep-jobs:/opt/hh-deep-deep/deepcrawler-jobs
+      - ./deepcrawler-jobs:/opt/hh-deep-deep/deepcrawler-jobs
     command:
       - hh-deep-deep-service
       - deepcrawler
