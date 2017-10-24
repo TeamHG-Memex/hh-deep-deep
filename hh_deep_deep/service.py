@@ -284,14 +284,14 @@ class Service:
                 progress_message['percentage_done'] = \
                     updates.get('percentage_done', 0)
             if progress_message != self.previous_progress.get(process):
-                logging.info('Sending update for "{}": {}'
-                             .format(id_, progress_message))
                 self.previous_progress[process] = progress_message
                 if is_trainer_started_by_crawler(process):
                     progress_producer = self.crawler_progress_producer
                     progress_message['id'] = process.crawler_params['id']
                 else:
                     progress_producer = self.progress_producer
+                logging.info('Sending update for "{}": {}'
+                             .format(id_, progress_message))
                 self.send(progress_producer, progress_message)
         if is_trainer_started_by_crawler(process):
             return  # no other updates needed, only progress
