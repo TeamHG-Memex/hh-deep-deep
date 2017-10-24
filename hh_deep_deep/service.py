@@ -90,11 +90,8 @@ class Service:
             **self.crawler_process_kwargs)
         if self.running:
             for id_, process in sorted(self.running.items()):
-                logging.info(
-                    'Already running crawl "{id}", pid {pid} in {root}'
-                    .format(id=id_,
-                            pid=process.pid,
-                            root=process.paths.root))
+                logging.info('Already running crawl "{id}", in {root}'
+                             .format(id=id_, root=process.paths.root))
         else:
             logging.info('No crawls running')
 
