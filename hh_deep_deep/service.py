@@ -276,7 +276,8 @@ class Service:
         progress = updates.get('progress')
         if progress is not None:
             progress_message = {process.id_field: id_, 'progress': progress}
-            progress_message['workspace_id'] = process.workspace_id
+            if self.queue_kind != 'deepcrawler':
+                progress_message['workspace_id'] = process.workspace_id
             if self.needs_percentage_done:
                 progress_message['percentage_done'] = \
                     updates.get('percentage_done', 0)
@@ -301,7 +302,8 @@ class Service:
             logging.info('Sending {} sample urls for "{}" to {}'
                          .format(len(page_samples), id_, pages_topic))
             message = {process.id_field: id_, 'page_samples': page_samples}
-            message['workspace_id'] = process.workspace_id
+            if self.queue_kind != 'deepcrawler':
+                message['workspace_id'] = process.workspace_id
             self.send(self.pages_producer, message)
         for url in updates.get('login_urls', []):
             logging.info('Sending login url for "{}": {}'.format(id_, url))
