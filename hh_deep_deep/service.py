@@ -176,8 +176,15 @@ class Service:
             return
         id_ = request['id'] if 'id' in request else workspace_id
         if not delayed:
-            logging.info('Got start crawl message with id "{id}", {n_urls} urls'
-                         .format(id=id_, n_urls=len(request['urls'])))
+            logging.info(
+                'Got start crawl message with id "{id}", {n_urls} urls{login}'
+                .format(
+                    id=id_,
+                    n_urls=len(request['urls']),
+                    login=(', {} login credentials'
+                           .format(len(request['login_credentials']))
+                           if 'login_credentials' in request else ''),
+                ))
         if self.needs_model and 'link_model' not in request:
             self._start_trainer_from_crawler(request)
             return
