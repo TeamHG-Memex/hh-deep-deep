@@ -236,12 +236,10 @@ def stop_crawl_message(id_: str) -> Dict:
 
 
 def test_deepcrawl(kafka_client: pykafka.KafkaClient):
-    # FIXME - max_workers set to 1 because with >1 workers the first might
-    # exit due to running out of domains, and handle_login will fail
     crawler_service = ATestService(
         'deepcrawler',
         check_updates_every=2,
-        max_workers=1,
+        max_workers=4,
         in_flight_ttl=5,
         idle_before_close=5,  # this is not supported yet
         test_server_container=TEST_SERVER_CONTAINER,

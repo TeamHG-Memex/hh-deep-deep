@@ -4,6 +4,7 @@ Utils related to dd-crawler.
 import json
 import logging
 from pathlib import Path
+import re
 import subprocess
 from typing import Dict
 
@@ -90,8 +91,19 @@ class BaseDDCrawlerProcess(CrawlProcess):
         return 'http://proxy:8118' if self.proxy_container else ''
 
     def _scrapy_command(self, command, *args):
+        # Find which crawler is still alive (some might finish earlier)
+        ps_output = subprocess.check_output(
+            ['docker-compose', 'ps'], cwd=str(self.paths.root))
+        ps_output = ps_output.decode('ascii', 'replace')
+        index = '1'
+        for line in ps_output.split('\n'):
+            m = re.match(r'[\da-f]+_crawler_(\d+)\s', line)
+            if m:
+                index = m.groups()[0]
+                break
         self._compose_call(
-            'exec', '-T', 'crawler', 'scrapy', command, 'deepdeep', *args,
+            'exec', '-T', '--index', index,
+            'crawler', 'scrapy', command, 'deepdeep', *args,
             '-s', 'REDIS_HOST=redis', '-s', 'LOG_LEVEL=WARNING')
 
     def _compose_call(self, *args):
