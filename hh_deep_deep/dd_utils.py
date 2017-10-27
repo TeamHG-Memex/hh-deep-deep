@@ -26,6 +26,7 @@ DEFAULT_CRAWLER_PAGE_LIMIT = 10000000
 class BaseDDCrawlerProcess(CrawlProcess):
     default_docker_image = 'dd-crawler-hh'
     paths_cls = BaseDDPaths
+    crawler_name = None
 
     def __init__(self, *,
                  root: Path=None,
@@ -103,7 +104,7 @@ class BaseDDCrawlerProcess(CrawlProcess):
                 break
         self._compose_call(
             'exec', '-T', '--index', index,
-            'crawler', 'scrapy', command, 'deepdeep', *args,
+            'crawler', 'scrapy', command, self.crawler_name, *args,
             '-s', 'REDIS_HOST=redis', '-s', 'LOG_LEVEL=WARNING')
 
     def _compose_call(self, *args):

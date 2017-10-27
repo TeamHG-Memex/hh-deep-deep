@@ -22,6 +22,7 @@ class DDCrawlerPaths(BaseDDPaths):
 
 class DDCrawlerProcess(BaseDDCrawlerProcess):
     paths_cls = DDCrawlerPaths
+    crawler_name = 'deepdeep'
 
     def __init__(self, *,
                  page_clf_data: bytes,

@@ -331,17 +331,19 @@ def test_deepcrawl(kafka_client: pykafka.KafkaClient):
         assert login_message['workspace_id'] == start_message['workspace_id']
         assert login_message['keys'] == ['login', 'password']
         debug('Waiting for login result message...')
-        expected_cred_ids = {'cred-id-initial-correct', 'cred-id-initial-wrong'}
+        expected_cred_ids = {'cred-id-initial-correct', 'cred-id-initial-wrong',
+                             'cred-id-sent-later'}
         login_results = {}
         while set(login_results) != expected_cred_ids:
             r = consume(login_result_consumer)
-            debug('Got login result for {}'.format(r['id']))
+            debug('Got login result for {}: {}'.format(r['id'], r['result']))
             login_results[r['id']] = r
         assert login_results['cred-id-initial-correct']['result'] == 'success'
-        # FIXME - this is most likely an autologin / test server issue
+        # FIXME - this is most likely a test server issue:
+        # FIXME login state is shared?
         # assert login_results['cred-id-initial-wrong']['result'] == 'failed'
         assert login_results['cred-id-initial-wrong']
-        # assert login_results['cred-id-sent-later']['result'] == 'success'
+        assert login_results['cred-id-sent-later']['result'] == 'success'
     finally:
         input_producer.produce(encode_message(
              stop_crawl_message(start_message['id'])))
