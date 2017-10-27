@@ -285,15 +285,7 @@ def test_deepcrawl(kafka_client: pykafka.KafkaClient):
     expected_live_domains = {'test-server-1', 'test-server-2', 'test-server-3'}
     expected_domains = expected_live_domains | {'no-such-domain'}
     try:
-        debug('Waiting for pages message...')
-        pages = consume(pages_consumer)
-        for p in pages.get('page_samples'):
-            domain = p['domain']
-            assert domain in expected_live_domains
-            assert get_domain(p['url']) == domain
-        debug('Got it, sending login message...')
-        # this message is not delivered in time at the moment
-        # TODO maybe increase download delay?
+        debug('Sending login message...')
         login_input_producer.produce(encode_message({
             'job_id': start_message['id'],
             'workspace_id': start_message['workspace_id'],
@@ -302,6 +294,12 @@ def test_deepcrawl(kafka_client: pykafka.KafkaClient):
             'url': 'http://test-server-3:8781/login',
             'key_values': {'login': 'admin', 'password': 'secret'},
         }))
+        debug('Waiting for pages message...')
+        pages = consume(pages_consumer)
+        for p in pages.get('page_samples'):
+            domain = p['domain']
+            assert domain in expected_live_domains
+            assert get_domain(p['url']) == domain
         while True:
             debug('Waiting for progress message...')
             progress_message = consume(progress_consumer)
@@ -333,11 +331,17 @@ def test_deepcrawl(kafka_client: pykafka.KafkaClient):
         assert login_message['workspace_id'] == start_message['workspace_id']
         assert login_message['keys'] == ['login', 'password']
         debug('Waiting for login result message...')
-        login_results = {r['id']: r for r in (
-            consume(login_result_consumer) for _ in range(2))}
+        expected_cred_ids = {'cred-id-initial-correct', 'cred-id-initial-wrong'}
+        login_results = {}
+        while set(login_results) != expected_cred_ids:
+            r = consume(login_result_consumer)
+            debug('Got login result for {}'.format(r['id']))
+            login_results[r['id']] = r
         assert login_results['cred-id-initial-correct']['result'] == 'success'
         # FIXME - this is most likely an autologin / test server issue
         # assert login_results['cred-id-initial-wrong']['result'] == 'failed'
+        assert login_results['cred-id-initial-wrong']
+        # assert login_results['cred-id-sent-later']['result'] == 'success'
     finally:
         input_producer.produce(encode_message(
              stop_crawl_message(start_message['id'])))
